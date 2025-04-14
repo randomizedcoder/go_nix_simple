@@ -25,7 +25,9 @@
           subPackages = [ "cmd/go_nix_simple" ];
 
           # Needed for Go builds
-          vendorHash = pkgs.lib.fakeSha256; # Use fakeSha256 for initial build, then replace
+          #vendorHash = pkgs.lib.fakeSha256; # Use fakeSha256 for initial build, then replace
+          #vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+          vendorHash = "sha256-caiTCIpCDiSspjLd9JI/vr0Mlhud9uNtZ+GtGoTUraU=";
           # Or generate with: nix-prefetch-git --url <your-repo-url> --rev <commit-sha> | jq -r .hash
           # Or if you use go mod vendor:
           # vendorHash = "sha256:<hash-of-vendor-dir>"; # Calculate with nix-hash --type sha256 --base32 ./vendor
@@ -44,7 +46,7 @@
           # Ensure your Go binary is statically linked for this to work best.
           # Add ldflags = [ "-linkmode=external" "-extldflags=-static" ]; to buildGoModule if needed.
           # Or use a slightly larger base like pkgs.dockerTools.busyboxImage
-          fromImage = pkgs.dockerTools.distroless.static; # Minimal base
+          #fromImage = pkgs.dockerTools.distroless.static; # Minimal base
 
           # Contents of the image: just our Go binary
           contents = [ go-nix-simple-app ];
