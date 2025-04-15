@@ -1,0 +1,38 @@
+
+
+FROM nixos/nix AS build
+
+# Install nginx
+RUN mkdir -p /output/store
+RUN nix-env --profile /output/profile -i nginx
+RUN cp -va $(nix-store -qR /output/profile) /output/store
+
+# Create empty directories needed by nginx
+RUN mkdir -p /to_add/var/log/nginx \
+             /to_add/var/cache/nginx \
+             /to_add/var/conf/ \
+             /to_add/var/www
+
+# Create user and group for nginx
+RUN addgroup --system nginx
+RUN adduser --system -G nginx --uid 31337 nginx
+
+# Make sure nginx can write to required directories
+RUN chown -R 31337 /to_add/
+
+FROM scratch
+
+# Copy over nginx files and dependencies
+COPY --from=build /output/store /nix/store
+COPY --from=build /output/profile/ /usr/local/
+COPY --from=build /to_add /
+
+# Copy required user information
+COPY --from=build /etc/passwd /etc/passwd
+COPY --from=build /etc/group /etc/group
+
+# Add user specific content and config
+COPY ./index.html /var/www/
+COPY ./nginx.conf /var/conf/nginx.conf
+EXPOSE 80
+CMD ["nginx", "-p", "/var/"]

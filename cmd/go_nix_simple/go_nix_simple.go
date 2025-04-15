@@ -36,6 +36,7 @@ func main() {
 
 	for {
 		fmt.Println("Hello")
+		pC.WithLabelValues("main", "hello", "count").Inc()
 		time.Sleep(10 * time.Second)
 	}
 }

@@ -15,13 +15,10 @@
         # Define the Go application build
         go-nix-simple-app = pkgs.buildGoModule {
           pname = "go-nix-simple";
-          version = "0.1.0"; # You can manage the version here
+          version = "0.1.0";
 
-          # Assuming your flake.nix is at the root of go_nix_simple
-          # and your go code is in ./cmd/go_nix_simple/
           src = ./.;
 
-          # Tell Go where the main package is
           subPackages = [ "cmd/go_nix_simple" ];
 
           # Needed for Go builds
@@ -32,63 +29,65 @@
           # Or if you use go mod vendor:
           # vendorHash = "sha256:<hash-of-vendor-dir>"; # Calculate with nix-hash --type sha256 --base32 ./vendor
 
-          # Optional: Add build tags or linker flags if needed
+          # Add build tags and linker flags for static linking and size reduction
           # buildFlags = [ "-tags=netgo" ];
-          # ldflags = [ "-s" "-w" ]; # Example: strip debugging info
+          ldflags = [
+            "-s" "-w" # Strip symbols and debug info
+            #"-linkmode=external" "-extldflags=-static" # Force static linking
+          ];
+          env = {
+            CGO_ENABLED = 0;
+          };
         };
 
-        # Define the Docker image build
+        # nix-shell -p nix-prefetch-docker
+        # nix-prefetch-docker --image-name gcr.io/distroless/static-debian12 --image-tag latest
+        distroless-base = pkgs.dockerTools.pullImage {
+          imageName = "gcr.io/distroless/static-debian12";
+          imageDigest = "sha256:3d0f463de06b7ddff27684ec3bfd0b54a425149d0f8685308b1fdf297b0265e9";
+          sha256 = "0ajgz5slpdv42xqrildx850vp4cy6x44yj0hfz53raz3r971ikcf";
+          finalImageTag = "latest";
+        };
+
+        # Docker image build
         go-nix-simple-image = pkgs.dockerTools.buildLayeredImage {
-          name = "go-nix-simple";
-          tag = "latest"; # Or use the version from go-nix-simple-app
 
-          # Use a minimal base image (distroless static)
-          # Ensure your Go binary is statically linked for this to work best.
-          # Add ldflags = [ "-linkmode=external" "-extldflags=-static" ]; to buildGoModule if needed.
-          # Or use a slightly larger base like pkgs.dockerTools.busyboxImage
-          #fromImage = pkgs.dockerTools.distroless.static; # Minimal base
+          name = "randomizedcoder/go-nix-simple";
+          tag = "latest";
+          # created = "now";
 
-          # Contents of the image: just our Go binary
+          fromImage = distroless-base;
+
           contents = [ go-nix-simple-app ];
 
-          # Configure how the container runs
           config = {
-            # Expose the Prometheus port
+
             ExposedPorts = {
               "9108/tcp" = {};
             };
-            # Command to run when the container starts
-            # This assumes the binary is placed in /bin/go_nix_simple by buildGoModule
             Cmd = [ "${go-nix-simple-app}/bin/go_nix_simple" ];
             WorkingDir = "/";
-            # You might want to set a non-root user for better security
-            # User = "nobody";
+            User = "nobody";
           };
         };
 
       in
       {
-        # The Go binary package
         packages.go-nix-simple = go-nix-simple-app;
 
-        # The Docker image package
         packages.docker-image = go-nix-simple-image;
 
-        # Default package when running `nix build`
+        # `nix build`
         packages.default = self.packages.${system}.docker-image;
 
-        # Allow running the app directly using `nix run`
+        # `nix run`
         apps.default = flake-utils.lib.mkApp {
            drv = go-nix-simple-app;
-           exePath = "/bin/go_nix_simple"; # Adjust if the binary path is different
+           exePath = "/bin/go_nix_simple";
         };
 
-        # You can also provide the docker image tarball via apps
         apps.docker-image-tarball = flake-utils.lib.mkApp {
           drv = go-nix-simple-image;
-          # This doesn't "run" anything, but `nix run .#docker-image-tarball`
-          # will build the image and place the tarball in ./result
-          # You can then load it with `docker load < result`
           name = "docker-image-tarball";
         };
 

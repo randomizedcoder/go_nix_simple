@@ -1,22 +1,107 @@
+#
+# /go-nix-simple/Makefile
+#
 
-all:
+VERSION := $(shell cat VERSION)
+LOCAL_MAJOR_VERSION := $(word 1,$(subst ., ,$(VERSION)))
+LOCAL_MINOR_VERSION := $(word 2,$(subst ., ,$(VERSION)))
+LOCAL_PATCH_VERSION := $(word 3,$(subst ., ,$(VERSION)))
+SHELL := /usr/bin/env bash
+.SHELLFLAGS := -eu -o pipefail -c
 
-build_simple:
-	nix build .#go-nix-simple
+MYPATH = $(shell pwd)
+COMMIT := $(shell git describe --always)
+DATE := $(shell date -u +"%Y-%m-%d-%H:%M")
 
-docker:
-	nix build .
+TIMESTAMP := date +"%Y-%m-%d %H:%M:%S.%3N"
 
-docker_trace:
-	nix build . --show-trace
+# Add all targets to .PHONY for clarity and correctness
+.PHONY: all nix_build_go-nix-simple nix_build_docker nix_build_docker_trace nix_build_docker_load builddocker_go-nix-simple-distroless ls dive dive-distroless run curl prepare
 
-load:
-	docker load < result
+all: nix_build_docker nix_build_docker_load builddocker_go-nix-simple-distroless ls
+
+#--------------------------
+# nix build
+
+nix_build_go-nix-simple:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	nix build .#go-nix-simple; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+nix_build_docker:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	nix build .; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+nix_build_docker_trace:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	nix build . --show-trace; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+nix_build_docker_load:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	docker load < result; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+
+#--------------------------
+# docker build
+
+builddocker_go-nix-simple-distroless:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	echo "================================"; \
+	echo "Make builddocker_go_nix_simple randomizedcoder/go-nix-simple-distroless:${VERSION}"; \
+	docker build \
+		--build-arg MYPATH=${MYPATH} \
+		--build-arg COMMIT=${COMMIT} \
+		--build-arg DATE=${DATE} \
+		--build-arg VERSION=${VERSION} \
+		--file build/containers/go_nix_simple/Containerfile \
+		--tag randomizedcoder/go-nix-simple-distroless:${VERSION} --tag randomizedcoder/go-nix-simple-distroless:latest \
+		${MYPATH}; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+#--------------------------
+# inspect
+
+ls:
+	docker image ls randomizedcoder/go-nix-simple;
+	docker image ls randomizedcoder/go-nix-simple-distroless;
+
+dive:
+	dive randomizedcoder/go-nix-simple:latest
+
+dive-distroless:
+	dive randomizedcoder/go-nix-simple-distroless:latest
 
 run:
-	docker run -d -p 9108:9108 go-nix-simple:latest
+	docker run -d -p 9108:9108 randomizedcoder/go-nix-simple:latest
+
+run-distroless:
+	docker run -d -p 9108:9108 randomizedcoder/go-nix-simple-distroless:latest
 
 curl:
 	curl http://localhost:9108/metrics
+
+# https://ryantm.github.io/nixpkgs/builders/images/dockertools/#ssec-pkgs-dockerTools-fetchFromRegistry
+# https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/docker/nix-prefetch-docker
+prepare:
+	nix-shell -p nix-prefetch-docker
+	nix-prefetch-docker --image-name gcr.io/distroless/static-debian12 --image-tag latest
 
 # end
