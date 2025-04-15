@@ -25,3 +25,10 @@ build:
 		"-X main.commit=${COMMIT} -X main.date=${DATE} -X main.version=${LOCAL_MAJOR_VERSION}.${LOCAL_MINOR_VERSION}.${LOCAL_PATCH_VERSION}" \
 		-o ./${BINARY} \
 		./${BINARY}.go
+
+builda:
+	GOPROXY=http://127.0.0.1:8888 \
+	go build -ldflags \
+		"-X main.commit=${COMMIT} -X main.date=${DATE} -X main.version=${LOCAL_MAJOR_VERSION}.${LOCAL_MINOR_VERSION}.${LOCAL_PATCH_VERSION}" \
+		-o ./${BINARY} \
+		./${BINARY}.go

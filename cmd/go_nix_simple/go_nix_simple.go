@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
-	"github.com/google/martian/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -19,6 +19,11 @@ const (
 )
 
 var (
+	// Passed by "go build -ldflags" for the show version
+	commit  string
+	date    string
+	version string
+
 	pC = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: "counters",
@@ -31,11 +36,14 @@ var (
 
 func main() {
 
-	go initPromHandler(promPathCst, promListenCst)
-	pC.WithLabelValues("main", "start", "count").Inc()
+	log.Printf("go_nix_simple commit:%s\tdate(UTC):%s\tversion:%s", commit, date, version)
 
-	for {
-		fmt.Println("Hello")
+	go initPromHandler(promPathCst, promListenCst)
+
+	// pC.WithLabelValues("main", "start", "count").Inc()
+
+	for i := 0; ; i++ {
+		fmt.Printf("Hello %d", i)
 		pC.WithLabelValues("main", "hello", "count").Inc()
 		time.Sleep(10 * time.Second)
 	}
@@ -55,7 +63,7 @@ func initPromHandler(promPath string, promListen string) {
 	go func() {
 		err := http.ListenAndServe(promListen, nil)
 		if err != nil {
-			log.Errorf("prometheus error")
+			log.Fatal("prometheus error")
 		}
 	}()
 }
