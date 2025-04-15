@@ -6,8 +6,8 @@ This is an example repo that shows building a simple go program, and then buildi
 
 | Build Method | Build Time | Image Size |
 | :----------- | :--------- | :--------- |
-| Nix Built    | 20764 ms   | 12.8MB     | <-- Slower, but smaller!
-| Docker Built | 185 ms     | 14.3MB     |
+| Nix built    | 20764 ms   | 12.8MB     | <-- Slower, but smaller!
+| Docker built | 1799 ms    | 14.3MB     |
 
 Please note that docker build uses docker caching.
 
