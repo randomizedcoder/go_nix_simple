@@ -32,8 +32,14 @@ RUN echo MYPATH:${MYPATH} COMMIT:${COMMIT} DATE:${DATE} VERSION:${VERSION} \
 WORKDIR /go/src
 COPY . .
 
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
+# RUN --mount=type=cache,target=/go/pkg/mod \
+#     --mount=type=cache,target=/root/.cache/go-build \
+#     CGO_ENABLED=0 go build \
+#     -o /go/bin/go_nix_simple \
+#     ./cmd/go_nix_simple/go_nix_simple.go
+
+# GOPROXY=http://10.88.88.88:8888 \
+RUN GOPROXY=http://127.0.0.1:8888 \
     CGO_ENABLED=0 go build \
     -o /go/bin/go_nix_simple \
     ./cmd/go_nix_simple/go_nix_simple.go
@@ -46,7 +52,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM gcr.io/distroless/static-debian12
 #FROM gcr.io/distroless/static-debian12:debug
 #FROM scratch
-COPY --from=build --chmod=544 /go/bin/go_nix_simple /go_nix_simple
+COPY --from=build --chmod=544 /go/bin/go_nix_simple /
+COPY --from=build --chmod=444 /go/src/VERSION /
 
 # Prometheus
 EXPOSE 9108

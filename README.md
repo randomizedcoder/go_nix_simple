@@ -7,9 +7,12 @@ This is an example repo that shows building a simple go program, and then buildi
 | Build Method | Build Time | Image Size |
 | :----------- | :--------- | :--------- |
 | Nix built    | 20764 ms   | 12.8MB     | <-- Slower, but smaller!
-| Docker built | 1799 ms    | 14.3MB     |
+| Nix built    | 3691 ms    | 12.8MB     | <-- Sometimes it seesm to be faster?
+| Docker built | 597 ms     | 14.3MB     |
 
 Please note that docker build uses docker caching.
+
+Maybe the faster time is when the docker layers are cached?
 
 We can see that the nix build is taking dramatically longer that docker, because docker benefits from the caching.
 
@@ -19,49 +22,129 @@ Please see the [Makefile](./Makefile) for how to run this
 ## make
 
 ```
+make deploy_athens   <--- Start Athens proxy cache for go
+make
+```
+
+### make slow
+```
 [das@t:~/Downloads/go_nix_simple]$ make
 [] Starting nix_build_docker...
 warning: Git tree '/home/das/Downloads/go_nix_simple' is dirty
-[] Finished nix_build_docker. Duration: 20764 ms.
+[] Finished nix_build_docker. Duration: 21138 ms.                                             <--- SLOW!
 [] Starting nix_build_docker_load...
-0f9c4334b1a6: Loading layer [==================================================>]  8.274MB/8.274MB
-456e1fd34b9d: Loading layer [==================================================>]  10.24kB/10.24kB
-The image randomizedcoder/go-nix-simple:latest already exists, renaming the old one with ID sha256:185ae23f9226f0628f84eec9512188fa5647e791e288708f3c56b2052fb6835d to empty string
+2a422a703200: Loading layer [==================================================>]  8.274MB/8.274MB
+7a9ae153fd4a: Loading layer [==================================================>]  10.24kB/10.24kB
+The image randomizedcoder/go-nix-simple:latest already exists, renaming the old one with ID sha256:f52ca07c75c42b6210bd3679009e1527b0a2679a21f9bf3f948702a68725bc4e to empty string
 Loaded image: randomizedcoder/go-nix-simple:latest
-[] Finished nix_build_docker_load. Duration: 185 ms.
+[] Finished nix_build_docker_load. Duration: 184 ms.
 [] Starting builddocker_go-nix-simple-distroless...
 ================================
 Make builddocker_go_nix_simple randomizedcoder/go-nix-simple-distroless:1.0.0
-[+] Building 1.7s (14/14) FINISHED                                                                                                                                              docker:default
+[+] Building 2.1s (14/14) FINISHED                                                                                                                                              docker:default
  => [internal] load build definition from Containerfile                                                                                                                                   0.0s
  => => transferring dockerfile: 1.39kB                                                                                                                                                    0.0s
  => [internal] load metadata for gcr.io/distroless/static-debian12:latest                                                                                                                 0.4s
- => [internal] load metadata for docker.io/library/golang:1.24.1                                                                                                                          0.7s
+ => [internal] load metadata for docker.io/library/golang:1.24.1                                                                                                                          1.0s
  => [auth] library/golang:pull token for registry-1.docker.io                                                                                                                             0.0s
  => [internal] load .dockerignore                                                                                                                                                         0.0s
  => => transferring context: 44B                                                                                                                                                          0.0s
  => CACHED [build 1/5] FROM docker.io/library/golang:1.24.1@sha256:52ff1b35ff8de185bf9fd26c70077190cd0bed1e9f16a2d498ce907e5c421268                                                       0.0s
  => [internal] load build context                                                                                                                                                         0.0s
- => => transferring context: 14.18kB                                                                                                                                                      0.0s
+ => => transferring context: 14.43kB                                                                                                                                                      0.0s
  => [stage-1 1/2] FROM gcr.io/distroless/static-debian12:latest@sha256:3d0f463de06b7ddff27684ec3bfd0b54a425149d0f8685308b1fdf297b0265e9                                                   0.0s
- => [build 2/5] RUN echo MYPATH:/home/das/Downloads/go_nix_simple COMMIT:cd1a79a DATE:2025-04-15-17:17 VERSION:1.0.0     BUILDPLATFORM:${BUILDPLATFORM} TARGETPLATFORM:linux/amd64        0.2s
+ => [build 2/5] RUN echo MYPATH:/home/das/Downloads/go_nix_simple COMMIT:2c17b5f DATE:2025-04-15-19:51 VERSION:1.0.0     BUILDPLATFORM:${BUILDPLATFORM} TARGETPLATFORM:linux/amd64        0.2s
  => [build 3/5] WORKDIR /go/src                                                                                                                                                           0.0s
  => [build 4/5] COPY . .                                                                                                                                                                  0.1s
- => [build 5/5] RUN --mount=type=cache,target=/go/pkg/mod     --mount=type=cache,target=/root/.cache/go-build     CGO_ENABLED=0 go build     -o /go/bin/go_nix_simple     ./cmd/go_nix_s  0.6s
+ => [build 5/5] RUN --mount=type=cache,target=/go/pkg/mod     --mount=type=cache,target=/root/.cache/go-build     CGO_ENABLED=0 go build     -o /go/bin/go_nix_simple     ./cmd/go_nix_s  0.7s
  => CACHED [stage-1 2/2] COPY --from=build --chmod=544 /go/bin/go_nix_simple /go_nix_simple                                                                                               0.0s
  => exporting to image                                                                                                                                                                    0.0s
  => => exporting layers                                                                                                                                                                   0.0s
  => => writing image sha256:6929205614c14737bc6c194900158d1950f32c425f6867c476b59e2f318ac2ee                                                                                              0.0s
  => => naming to docker.io/randomizedcoder/go-nix-simple-distroless:1.0.0                                                                                                                 0.0s
  => => naming to docker.io/randomizedcoder/go-nix-simple-distroless:latest                                                                                                                0.0s
-[] Finished builddocker_go-nix-simple-distroless. Duration: 1799 ms.
+[] Finished builddocker_go-nix-simple-distroless. Duration: 2233 ms.
 docker image ls randomizedcoder/go-nix-simple;
 REPOSITORY                      TAG       IMAGE ID       CREATED        SIZE
-randomizedcoder/go-nix-simple   latest    5e59c68ce19c   55 years ago   12.8MB
+randomizedcoder/go-nix-simple   latest    252e7a96255c   55 years ago   12.8MB
 docker image ls randomizedcoder/go-nix-simple-distroless;
-REPOSITORY                                 TAG       IMAGE ID       CREATED          SIZE
-randomizedcoder/go-nix-simple-distroless   1.0.0     6929205614c1   28 minutes ago   14.3MB
-randomizedcoder/go-nix-simple-distroless   latest    6929205614c1   28 minutes ago   14.3MB
+REPOSITORY                                 TAG       IMAGE ID       CREATED       SIZE
+randomizedcoder/go-nix-simple-distroless   1.0.0     6929205614c1   3 hours ago   14.3MB
+randomizedcoder/go-nix-simple-distroless   latest    6929205614c1   3 hours ago   14.3MB
+```
+
+### make faster?
+```
+[das@t:~/Downloads/go_nix_simple]$ make
+[] Starting nix_build_docker...
+warning: Git tree '/home/das/Downloads/go_nix_simple' is dirty
+[] Finished nix_build_docker. Duration: 3691 ms.                                <---- Faster?
+[] Starting nix_build_docker_load...
+Loaded image: randomizedcoder/go-nix-simple:latest
+[] Finished nix_build_docker_load. Duration: 134 ms.
+[] Starting builddocker_go-nix-simple-distroless...
+================================
+Make builddocker_go_nix_simple randomizedcoder/go-nix-simple-distroless:1.0.0
+[+] Building 0.5s (13/13) FINISHED                                                                                                                                              docker:default
+ => [internal] load build definition from Containerfile                                                                                                                                   0.0s
+ => => transferring dockerfile: 1.39kB                                                                                                                                                    0.0s
+ => [internal] load metadata for gcr.io/distroless/static-debian12:latest                                                                                                                 0.3s
+ => [internal] load metadata for docker.io/library/golang:1.24.1                                                                                                                          0.4s
+ => [internal] load .dockerignore                                                                                                                                                         0.0s
+ => => transferring context: 44B                                                                                                                                                          0.0s
+ => [stage-1 1/2] FROM gcr.io/distroless/static-debian12:latest@sha256:3d0f463de06b7ddff27684ec3bfd0b54a425149d0f8685308b1fdf297b0265e9                                                   0.0s
+ => [build 1/5] FROM docker.io/library/golang:1.24.1@sha256:52ff1b35ff8de185bf9fd26c70077190cd0bed1e9f16a2d498ce907e5c421268                                                              0.0s
+ => [internal] load build context                                                                                                                                                         0.0s
+ => => transferring context: 1.22kB                                                                                                                                                       0.0s
+ => CACHED [build 2/5] RUN echo MYPATH:/home/das/Downloads/go_nix_simple COMMIT:2c17b5f DATE:2025-04-15-18:39 VERSION:1.0.0     BUILDPLATFORM:${BUILDPLATFORM} TARGETPLATFORM:linux/amd6  0.0s
+ => CACHED [build 3/5] WORKDIR /go/src                                                                                                                                                    0.0s
+ => CACHED [build 4/5] COPY . .                                                                                                                                                           0.0s
+ => CACHED [build 5/5] RUN --mount=type=cache,target=/go/pkg/mod     --mount=type=cache,target=/root/.cache/go-build     CGO_ENABLED=0 go build     -o /go/bin/go_nix_simple     ./cmd/g  0.0s
+ => CACHED [stage-1 2/2] COPY --from=build --chmod=544 /go/bin/go_nix_simple /go_nix_simple                                                                                               0.0s
+ => exporting to image                                                                                                                                                                    0.0s
+ => => exporting layers                                                                                                                                                                   0.0s
+ => => writing image sha256:6929205614c14737bc6c194900158d1950f32c425f6867c476b59e2f318ac2ee                                                                                              0.0s
+ => => naming to docker.io/randomizedcoder/go-nix-simple-distroless:1.0.0                                                                                                                 0.0s
+ => => naming to docker.io/randomizedcoder/go-nix-simple-distroless:latest                                                                                                                0.0s
+[] Finished builddocker_go-nix-simple-distroless. Duration: 597 ms.
+docker image ls randomizedcoder/go-nix-simple;
+REPOSITORY                      TAG       IMAGE ID       CREATED        SIZE
+randomizedcoder/go-nix-simple   latest    a0144cb8f7cc   55 years ago   12.8MB
+docker image ls randomizedcoder/go-nix-simple-distroless;
+REPOSITORY                                 TAG       IMAGE ID       CREATED       SIZE
+randomizedcoder/go-nix-simple-distroless   1.0.0     6929205614c1   2 hours ago   14.3MB
+randomizedcoder/go-nix-simple-distroless   latest    6929205614c1   2 hours ago   14.3MB
+```
+
+### make again and again
+
+Nix _does_ cache, but this is for all the code
+
+```
+[das@t:~/Downloads/go_nix_simple]$ make nix_build_go-nix-simple
+[] Starting nix_build_go-nix-simple...
+warning: Git tree '/home/das/Downloads/go_nix_simple' is dirty
+[] Finished nix_build_go-nix-simple. Duration: 16395 ms.           <----- SLOW
+
+[das@t:~/Downloads/go_nix_simple]$ make nix_build_go-nix-simple
+[] Starting nix_build_go-nix-simple...
+warning: Git tree '/home/das/Downloads/go_nix_simple' is dirty
+[] Finished nix_build_go-nix-simple. Duration: 907 ms.             <--- FAST
+
+[das@t:~/Downloads/go_nix_simple]$ make nix_build_go-nix-simple
+[] Starting nix_build_go-nix-simple...
+warning: Git tree '/home/das/Downloads/go_nix_simple' is dirty
+[] Finished nix_build_go-nix-simple. Duration: 899 ms.             <--- FAST
+
+[das@t:~/Downloads/go_nix_simple]$ make nix_build_go-nix-simple
+[] Starting nix_build_go-nix-simple...
+warning: Git tree '/home/das/Downloads/go_nix_simple' is dirty
+[] Finished nix_build_go-nix-simple. Duration: 889 ms.             <--- FAST
+
+[das@t:~/Downloads/go_nix_simple]$ make nix_build_go-nix-simple
+[] Starting nix_build_go-nix-simple...
+warning: Git tree '/home/das/Downloads/go_nix_simple' is dirty
+[] Finished nix_build_go-nix-simple. Duration: 888 ms.             <--- FAST
 ```
 
 # ls -la
@@ -132,6 +215,48 @@ Here are screenshots of the x2 different images.  We can see the
 
 ## Layer 12 docker built go_nix_simple
 <img src="docs/images/Screenshot From 2025-04-15 10-27-36.png" alt="Layer 9/9 go_nix_simple" width="90%" height="90%">
+
+
+# Athens
+
+Deploy athens caching proxy for golang
+```
+make deploy_athens
+```
+This allows the Docker build to leverage the cache.
+
+[https://github.com/gomods/athens](https://github.com/gomods/athens)
+
+[https://docs.gomods.io/walkthrough/#with-docker](https://docs.gomods.io/walkthrough/#with-docker)
+
+
+I also tried to nix build athens into a container, but it doesn't run.
+```
+[das@t:~/Downloads/go_nix_simple]$ make nix_build_athens
+nix build .#athens-nix-image
+warning: Git tree '/home/das/Downloads/go_nix_simple' is dirty
+docker load < result
+dffb2d8b972b: Loading layer [==================================================>]  46.14MB/46.14MB
+250fef83d04b: Loading layer [==================================================>]  10.24kB/10.24kB
+Loaded image: randomizedcoder/athens-nix:latest
+
+[das@t:~/Downloads/go_nix_simple]$ docker image ls | grep athens
+gomods/athens                                                                              latest                             1f858fb0105c   5 months ago    176MB
+randomizedcoder/athens-nix                                                                 latest                             52cf8644c591   55 years ago    50.7MB
+
+[das@t:~/Downloads/go_nix_simple]$ docker run -p 8888:8888 randomizedcoder/athens-nix:latest
+2025/04/15 22:46:39 Running dev mode with default settings, consult config when you're ready to run in production
+INFO[10:46PM]: Exporter not specified. Traces won't be exported
+FATAL[10:46PM]: Could not create App    error=adding proxy routes: exec: "go": executable file not found in $PATH
+```
+
+I don't think you can use GOPROXY with buildGoModule:
+https://github.com/NixOS/nixpkgs/blob/589c31662739027f6b802f138fd12f4493ad68de/pkgs/build-support/go/module.nix#L89
+
+
+
+https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/go/module.nix#L105
+
 
 
 Other links:

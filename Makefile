@@ -15,8 +15,8 @@ DATE := $(shell date -u +"%Y-%m-%d-%H:%M")
 
 TIMESTAMP := date +"%Y-%m-%d %H:%M:%S.%3N"
 
-# Add all targets to .PHONY for clarity and correctness
-.PHONY: all nix_build_go-nix-simple nix_build_docker nix_build_docker_trace nix_build_docker_load builddocker_go-nix-simple-distroless ls dive dive-distroless run curl prepare
+# Fake targets
+.PHONY: all nix_build_go-nix-simple nix_build_docker nix_build_docker_trace nix_build_docker_load builddocker_go-nix-simple-distroless deploy_athens athens_traffic ls dive dive-distroless run run-distroless curl prepare
 
 all: nix_build_docker nix_build_docker_load builddocker_go-nix-simple-distroless ls
 
@@ -65,6 +65,7 @@ builddocker_go-nix-simple-distroless:
 	echo "================================"; \
 	echo "Make builddocker_go_nix_simple randomizedcoder/go-nix-simple-distroless:${VERSION}"; \
 	docker build \
+		--network=host \
 		--build-arg MYPATH=${MYPATH} \
 		--build-arg COMMIT=${COMMIT} \
 		--build-arg DATE=${DATE} \
@@ -75,6 +76,38 @@ builddocker_go-nix-simple-distroless:
 	_end_time_ns=$$(date +%s%N); \
 	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
 	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+#--------------------------
+# docker compose athens
+
+# https://docs.docker.com/engine/reference/commandline/docker/
+# https://docs.docker.com/compose/reference/
+deploy_athens:
+	@echo "================================"
+	@echo "Make deploy_athens"
+	docker compose \
+		--file build/containers/athens/docker-compose-athens.yml \
+		up -d --remove-orphans
+
+down_athens:
+	@echo "================================"
+	@echo "Make down_athens"
+	docker compose \
+		--file build/containers/athens/docker-compose-athens.yml \
+		down
+
+athens_traffic:
+	sudo tcpdump -ni any port 8888
+
+#--------------------------
+# nix build athens docker container
+
+nix_build_athens:
+	nix build .#athens-nix-image
+	docker load < result
+
+run_athens:
+	docker run -d -p 8888:8888 randomizedcoder/athens-nix:latest
 
 #--------------------------
 # inspect
@@ -103,5 +136,11 @@ curl:
 prepare:
 	nix-shell -p nix-prefetch-docker
 	nix-prefetch-docker --image-name gcr.io/distroless/static-debian12 --image-tag latest
+
+#--------------------------
+# clear go mod cache
+
+clear_go_mod_cache:
+	sudo rm -rf /home/das/go/pkg/mod/
 
 # end

@@ -1,0 +1,49 @@
+#
+# Athens docker-compose-athens.yml
+#
+
+name: athens
+
+# networks:
+#   net:
+#     driver: bridge
+#     enable_ipv6: false
+#     driver_opts:
+#       # https://docs.docker.com/network/drivers/bridge/#options
+#       com.docker.network.bridge.name: br-athens
+# # https://docs.docker.com/compose/networking/#use-a-pre-existing-network
+#     ipam:
+#       config:
+#         - subnet: 10.88.88.0/24
+#           gateway: 10.88.88.1
+#         # # IPv6 docker compose doesn't really work: https://github.com/docker/compose/issues/4958
+#         # # https://www.unique-local-ipv6.com/#
+#         # - subnet: fddc:1218:ef3::/64
+#         #   gateway: fddc:1218:ef3::1
+
+volumes:
+  athens: {}
+
+services:
+  #----------------------------------------------------------
+  # https://docs.gomods.io/install/using-docker/
+  athens:
+    container_name: athens
+    # https://hub.docker.com/r/gomods/athens/tags
+    image: gomods/athens:latest
+    volumes:
+      - athens:/tmp/athens
+    environment:
+      ATHENS_HOST: 0.0.0.0
+      ATHENS_PORT: 8888
+      ATHENS_LOG_LEVEL: debug
+      ATHENS_DISK_STORAGE_ROOT: /tmp/athens
+      ATHENS_STORAGE_TYPE: disk
+    # networks:
+    #   net:
+    #     ipv4_address: 10.88.88.88
+    # ports:
+    #   - 8888:8888
+    network_mode: host
+
+# end
