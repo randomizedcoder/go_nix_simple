@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	sleepTimeCst = 10 * time.Second
+
 	promListenCst           = ":9108"
 	promPathCst             = "/metrics"
 	promMaxRequestsInFlight = 10
@@ -45,7 +47,7 @@ func main() {
 	for i := 0; ; i++ {
 		fmt.Printf("Hello %d", i)
 		pC.WithLabelValues("main", "hello", "count").Inc()
-		time.Sleep(10 * time.Second)
+		time.Sleep(sleepTimeCst)
 	}
 }
 
