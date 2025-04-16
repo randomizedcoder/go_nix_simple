@@ -38,8 +38,10 @@ COPY . .
 #     -o /go/bin/go_nix_simple \
 #     ./cmd/go_nix_simple/go_nix_simple.go
 
-# GOPROXY=http://10.88.88.88:8888 \
-RUN GOPROXY=http://localhost:8888 \
+# https://go.dev/ref/mod
+# https://go.dev/ref/mod#module-proxy
+# https://go.dev/ref/mod#private-module-proxy-private
+RUN GOPROXY=http://localhost:8888,https://proxy.golang.org,direct \
     CGO_ENABLED=0 go build \
     -o /go/bin/go_nix_simple \
     ./cmd/go_nix_simple/go_nix_simple.go
