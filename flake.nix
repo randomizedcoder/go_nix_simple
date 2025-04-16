@@ -3,14 +3,26 @@
   description = "A simple Go application packaged with Nix and Docker";
 
   inputs = {
+    #nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+
+    gomod2nix = {
+      url = "github:tweag/gomod2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.utils.follows = "utils";
+    };
+
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, gomod2nix }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        let pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ gomod2nix.overlays.default ];
+        };
+        #pkgs = nixpkgs.legacyPackages.${system};
 
         # Define the Go application build
         # https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/go/module.nix
@@ -148,6 +160,17 @@
         apps.docker-image-tarball = flake-utils.lib.mkApp {
           drv = go-nix-simple-image;
           name = "docker-image-tarball";
+        };
+
+        # `nix develop`
+        devShells.default = pkgs.mkShell {
+          buildInputs = with pkgs; [
+            go
+            gopls
+            gotools
+            go-tools
+            gomod2nix.packages.${system}.default
+          ];
         };
 
       });

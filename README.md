@@ -278,6 +278,7 @@ https://nixos.wiki/wiki/Go
 https://nixos.org/manual/nixpkgs/stable/#sec-language-go
 
 
+https://jameswillia.ms/posts/go-nix-containers.html
 
 
 https://tmp.bearblog.dev/minimal-containers-using-nix/

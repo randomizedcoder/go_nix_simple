@@ -143,4 +143,16 @@ prepare:
 clear_go_mod_cache:
 	sudo rm -rf /home/das/go/pkg/mod/
 
+go_glean:
+	go clean -modcache
+
+#--------------------------
+# flake commands
+
+flake_metadata:
+	nix flake metadata
+
+flake_show:
+	nix flake show
+
 # end
