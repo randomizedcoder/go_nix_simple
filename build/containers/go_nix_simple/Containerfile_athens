@@ -32,17 +32,17 @@ RUN echo MYPATH:${MYPATH} COMMIT:${COMMIT} DATE:${DATE} VERSION:${VERSION} \
 WORKDIR /go/src
 COPY . .
 
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build \
-    -o /go/bin/go_nix_simple \
-    ./cmd/go_nix_simple/go_nix_simple.go
-
-# # GOPROXY=http://10.88.88.88:8888 \
-# RUN GOPROXY=http://localhost:8888 \
+# RUN --mount=type=cache,target=/go/pkg/mod \
+#     --mount=type=cache,target=/root/.cache/go-build \
 #     CGO_ENABLED=0 go build \
 #     -o /go/bin/go_nix_simple \
 #     ./cmd/go_nix_simple/go_nix_simple.go
+
+# GOPROXY=http://10.88.88.88:8888 \
+RUN GOPROXY=http://localhost:8888 \
+    CGO_ENABLED=0 go build \
+    -o /go/bin/go_nix_simple \
+    ./cmd/go_nix_simple/go_nix_simple.go
 
 # https://github.com/docker-archive/compose-cli/blob/main/Dockerfile#L31
 

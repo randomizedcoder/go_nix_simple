@@ -5,7 +5,7 @@
   inputs = {
     #nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    utils.url = "github:numtide/flake-utils";
 
     gomod2nix = {
       url = "github:tweag/gomod2nix";
@@ -15,10 +15,10 @@
 
   };
 
-  outputs = { self, nixpkgs, flake-utils, gomod2nix }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs = { self, nixpkgs, utils, gomod2nix }:
+    utils.lib.eachDefaultSystem (system:
       let
-        let pkgs = import nixpkgs {
+        pkgs = import nixpkgs {
           inherit system;
           overlays = [ gomod2nix.overlays.default ];
         };
@@ -64,6 +64,14 @@
           # https://discourse.nixos.org/t/rethink-goproxy/23534/10
         };
 
+        go-nix-simple-gomod2nix = pkgs.buildGoApplication {
+          pname = "go-nix-simple-gomod2nix";
+          version = "0.1.1";
+          src = ./.;
+          modules = ./gomod2nix.toml;
+        };
+        # https://github.com/nix-community/gomod2nix/blob/master/docs/nix-reference.md#buildgoapplication
+
         version-file-pkg = pkgs.runCommand "version-file" {} ''
           mkdir -p $out
           cp ${./VERSION} $out/VERSION
@@ -103,7 +111,32 @@
           };
         };
 
+        go-nix-simple-gomod2nix-image = pkgs.dockerTools.buildLayeredImage {
+
+          name = "randomizedcoder/go-nix-simple-gomod2nix";
+          tag = "latest";
+          # created = "now";
+
+          fromImage = distroless-base;
+
+          contents = [
+            go-nix-simple-gomod2nix
+            version-file-pkg
+          ];
+
+          config = {
+
+            ExposedPorts = {
+              "9108/tcp" = {};
+            };
+            Cmd = [ "${go-nix-simple-app}/bin/go_nix_simple" ];
+            WorkingDir = "/";
+            User = "nobody";
+          };
+        };
+
         athens-nix-image = pkgs.dockerTools.buildLayeredImage {
+
           name = "randomizedcoder/athens-nix";
           tag = "latest";
 
@@ -144,7 +177,11 @@
       {
         packages.go-nix-simple = go-nix-simple-app;
 
+        packages.go-nix-simple-gomod2nix = go-nix-simple-gomod2nix;
+
         packages.docker-image = go-nix-simple-image;
+
+        packages.docker-image-gomod2nix = go-nix-simple-gomod2nix-image;
 
         # `nix build`
         packages.default = self.packages.${system}.docker-image;
@@ -152,12 +189,12 @@
         packages.athens-nix-image = athens-nix-image;
 
         # `nix run`
-        apps.default = flake-utils.lib.mkApp {
+        apps.default = utils.lib.mkApp {
            drv = go-nix-simple-app;
            exePath = "/bin/go_nix_simple";
         };
 
-        apps.docker-image-tarball = flake-utils.lib.mkApp {
+        apps.docker-image-tarball = utils.lib.mkApp {
           drv = go-nix-simple-image;
           name = "docker-image-tarball";
         };
@@ -172,6 +209,8 @@
             gomod2nix.packages.${system}.default
           ];
         };
+
+
 
       });
 }
