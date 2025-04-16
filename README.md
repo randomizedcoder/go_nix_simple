@@ -253,6 +253,19 @@ FATAL[10:46PM]: Could not create App    error=adding proxy routes: exec: "go": e
 I don't think you can use GOPROXY with buildGoModule:
 https://github.com/NixOS/nixpkgs/blob/589c31662739027f6b802f138fd12f4493ad68de/pkgs/build-support/go/module.nix#L89
 
+Actually, it's because it's disabled here:
+
+```
+    configurePhase = args.configurePhase or (''
+      runHook preConfigure
+
+      export GOCACHE=$TMPDIR/go-cache
+      export GOPATH="$TMPDIR/go"
+      export GOPROXY=off                        <---- DISABLED
+      export GOSUMDB=off                              <---- Not sure why they do this.  Scary!
+```
+https://github.com/NixOS/nixpkgs/blob/589c31662739027f6b802f138fd12f4493ad68de/pkgs/build-support/go/module.nix#L180
+
 
 
 https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/go/module.nix#L105
@@ -260,6 +273,12 @@ https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/go/module.nix#L1
 
 
 Other links:
+
+https://nixos.wiki/wiki/Go
+https://nixos.org/manual/nixpkgs/stable/#sec-language-go
+
+
+
 
 https://tmp.bearblog.dev/minimal-containers-using-nix/
 

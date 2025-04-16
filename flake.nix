@@ -31,6 +31,7 @@
           # Or if you use go mod vendor:
           # vendorHash = "sha256:<hash-of-vendor-dir>"; # Calculate with nix-hash --type sha256 --base32 ./vendor
 
+          # https://nixos.org/manual/nixpkgs/stable/#var-go-ldflags
           # Add build tags and linker flags for static linking and size reduction
           # buildFlags = [ "-tags=netgo" ];
           ldflags = [
