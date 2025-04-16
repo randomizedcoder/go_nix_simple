@@ -18,7 +18,54 @@ This is an example repo that shows building a simple go program, and then buildi
 
 Please see the [Makefile](./Makefile) for how to run this
 
+## Performance tips
+
+Even if you aren't interested in Nix, some top tips for improving container build times for golang:
+
+### .dockerignore
+
+- You probably have `COPY . .` in your Containerfile, so this copies the .git folder, which has
+  many files and you probably don't need when building your continaer
+- Tell your docker build not to copy this, and it will be faster
+```
+echo ".git" > .dockerignore                     <--- Win!
+```
+
+### Docker build cache
+
+- Use the [docker build cache](https://github.com/randomizedcoder/go_nix_simple/blob/main/build/containers/go_nix_simple/Containerfile#L35).  This works great for local builds on your machine.
+```
+RUN --mount=type=cache,target=/go/pkg/mod \                 <--- Win!
+    --mount=type=cache,target=/root/.cache/go-build \       <--- Win!
+    CGO_ENABLED=0 go build \
+    -o /go/bin/go_nix_simple \
+    ./cmd/go_nix_simple/go_nix_simple.go
+```
+### Athens goproxy cache
+
+- For you ci/cd build farm, assuming you can't use the docker cache, you can use [Athens to proxy/cache modules](https://github.com/randomizedcoder/go_nix_simple/blob/main/build/containers/go_nix_simple/Containerfile_athens#L44).
+
+```
+# https://go.dev/ref/mod#private-module-proxy-private
+RUN GOPROXY=http://localhost:8888,https://proxy.golang.org,direct \    <--- Win!
+    CGO_ENABLED=0 go build \
+    -o /go/bin/go_nix_simple \
+    ./cmd/go_nix_simple/go_nix_simple.go
+```
+
+To [deploy Athens locally on your machine](https://github.com/randomizedcoder/go_nix_simple/blob/main/Makefile#L122) for testing do:
+```
+git clone https://github.com/randomizedcoder/go_nix_simple/
+cd go_nix_simple
+make deploy_athens
+```
+This will deploy a local Athens proxy with disk cache.  ( Please note I'm using the non-standard port, cos I alreayd have Grafana running.)
+
+
+
 ## make
+
+Running make will build the continers all the different ways, show you the time, and the size.
 
 ```
 make deploy_athens   <--- Start Athens proxy cache for go
