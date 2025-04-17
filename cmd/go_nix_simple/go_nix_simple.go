@@ -45,7 +45,7 @@ func main() {
 	// pC.WithLabelValues("main", "start", "count").Inc()
 
 	for i := 0; ; i++ {
-		fmt.Printf("Hello %d", i)
+		fmt.Printf("Hello %d\n", i)
 		pC.WithLabelValues("main", "hello", "count").Inc()
 		time.Sleep(sleepTimeCst)
 	}

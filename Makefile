@@ -16,9 +16,25 @@ DATE := $(shell date -u +"%Y-%m-%d-%H:%M")
 TIMESTAMP := date +"%Y-%m-%d %H:%M:%S.%3N"
 
 # Fake targets
-.PHONY: all nix_build_go-nix-simple nix_build_docker nix_build_docker_trace nix_build_docker_load gomod2nix nix_build_docker_gomod2nix nix_build_docker_gomod2nix_load builddocker_go-nix-simple-distroless builddocker_go-nix-simple-distroless-athens deploy_athens down_athens athens_traffic nix_build_athens run_athens ls dive dive-distroless run run-distroless curl prepare clear_go_mod_cache go_glean flake_metadata flake_show
+.PHONY: all nix_build_go-nix-simple nix_build_docker nix_build_docker_scratch \
+	nix_build_docker_trace nix_build_docker_load gomod2nix \
+	nix_build_docker_gomod2nix nix_build_docker_gomod2nix_load \
+	builddocker_go-nix-simple-distroless \
+	builddocker_go-nix-simple-distroless-athens \
+	builddocker_go-nix-simple-distroless-scratch \
+	deploy_athens down_athens athens_traffic nix_build_athens run_athens ls \
+	dive dive-distroless run run-distroless curl prepare clear_go_mod_cache \
+	go_glean flake_metadata flake_show
 
-all: nix_build_docker nix_build_docker_load builddocker_go-nix-simple-distroless builddocker_go-nix-simple-distroless-athens gomod2nix ls
+all: nix_build_docker nix_build_docker_load \
+	nix_build_docker_upx nix_build_docker_load \
+	nix_build_docker_scratch nix_build_docker_load \
+	builddocker_go-nix-simple-distroless \
+	builddocker_go-nix-simple-distroless-athens \
+	builddocker_go-nix-simple-scratch \
+	builddocker_go-nix-simple-upx \
+	gomod2nix \
+	ls
 
 #--------------------------
 # nix build
@@ -35,6 +51,22 @@ nix_build_docker:
 	@_start_time_ns=$$(date +%s%N); \
 	echo "[$($(TIMESTAMP))] Starting $@..."; \
 	nix build .; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+nix_build_docker_upx:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	nix build .#docker-image-upx; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+nix_build_docker_scratch:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	nix build .#docker-image-scratch; \
 	_end_time_ns=$$(date +%s%N); \
 	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
 	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
@@ -90,7 +122,8 @@ builddocker_go-nix-simple-distroless:
 		--build-arg DATE=${DATE} \
 		--build-arg VERSION=${VERSION} \
 		--file build/containers/go_nix_simple/Containerfile \
-		--tag randomizedcoder/go-nix-simple-distroless:${VERSION} --tag randomizedcoder/go-nix-simple-distroless:latest \
+		--tag randomizedcoder/docker-go-nix-simple-distroless:${VERSION} \
+		--tag randomizedcoder/docker-go-nix-simple-distroless:latest \
 		${MYPATH}; \
 	_end_time_ns=$$(date +%s%N); \
 	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
@@ -108,11 +141,51 @@ builddocker_go-nix-simple-distroless-athens:
 		--build-arg DATE=${DATE} \
 		--build-arg VERSION=${VERSION} \
 		--file build/containers/go_nix_simple/Containerfile_athens \
-		--tag randomizedcoder/go-nix-simple-distroless-athens:${VERSION} --tag randomizedcoder/go-nix-simple-distroless-athens:latest \
+		--tag randomizedcoder/docker-go-nix-simple-distroless-athens:${VERSION} \
+		--tag randomizedcoder/docker-go-nix-simple-distroless-athens:latest \
 		${MYPATH}; \
 	_end_time_ns=$$(date +%s%N); \
 	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
 	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+builddocker_go-nix-simple-scratch:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	echo "================================"; \
+	echo "Make builddocker_go_nix_simple randomizedcoder/docker-go-nix-simple-scratch:${VERSION}"; \
+	docker build \
+		--network=host \
+		--build-arg MYPATH=${MYPATH} \
+		--build-arg COMMIT=${COMMIT} \
+		--build-arg DATE=${DATE} \
+		--build-arg VERSION=${VERSION} \
+		--file build/containers/go_nix_simple/Containerfile_scratch \
+		--tag randomizedcoder/docker-go-nix-simple-scratch:${VERSION} \
+		--tag randomizedcoder/docker-go-nix-simple-scratch:latest \
+		${MYPATH}; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+builddocker_go-nix-simple-upx:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	echo "================================"; \
+	echo "Make builddocker_go_nix_simple randomizedcoder/docker-go-nix-simple-upx:${VERSION}"; \
+	docker build \
+		--network=host \
+		--build-arg MYPATH=${MYPATH} \
+		--build-arg COMMIT=${COMMIT} \
+		--build-arg DATE=${DATE} \
+		--build-arg VERSION=${VERSION} \
+		--file build/containers/go_nix_simple/Containerfile_upx \
+		--tag randomizedcoder/docker-go-nix-simple-scratch-upx:${VERSION} \
+		--tag randomizedcoder/docker-go-nix-simple-scratch-upx:latest \
+		${MYPATH}; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+# --progress=plain \
 
 #--------------------------
 # docker compose athens
@@ -150,10 +223,15 @@ run_athens:
 # inspect
 
 ls:
-	docker image ls randomizedcoder/go-nix-simple;
-	docker image ls randomizedcoder/go-nix-simple-distroless;
-	docker image ls randomizedcoder/go-nix-simple-distroless-athens;
-	docker image ls randomizedcoder/go-nix-simple-gomod2nix;
+	docker image ls randomizedcoder/nix-go-nix-simple-distroless;
+	docker image ls randomizedcoder/nix-go-nix-simple-scratch;
+	docker image ls randomizedcoder/gomod2nix-go-nix-simple-scratch
+	docker image ls randomizedcoder/docker-go-nix-simple-distroless;
+	docker image ls randomizedcoder/docker-go-nix-simple-distroless-athens;
+	docker image ls randomizedcoder/docker-go-nix-simple-distroless-scratch;
+	docker image ls randomizedcoder/gomod2nix-go-nix-simple-scratch;
+	@echo "===="
+	docker image ls | grep go-nix-simple
 
 dive:
 	dive randomizedcoder/go-nix-simple:latest

@@ -1,5 +1,5 @@
 #
-# ./build/containers/go_nix_simple/Containerfile
+# ./build/containers/go_nix_simple/Containerfile_scratch
 #
 
 # Passed in variables
@@ -41,25 +41,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -o /go/bin/go_nix_simple \
     ./cmd/go_nix_simple/go_nix_simple.go
 
-# # GOPROXY=http://10.88.88.88:8888 \
-# RUN GOPROXY=http://localhost:8888 \
-#     CGO_ENABLED=0 go build \
-#     -o /go/bin/go_nix_simple \
-#     ./cmd/go_nix_simple/go_nix_simple.go
-
-# https://github.com/docker-archive/compose-cli/blob/main/Dockerfile#L31
+ADD --chmod=444 https://curl.haxx.se/ca/cacert.pem /certs.crt
 
 FROM scratch AS arrange
 COPY --from=build --chmod=544 /go/bin/go_nix_simple /
 COPY --from=build --chmod=444 /go/src/VERSION /
+COPY --from=build --chmod=444 /certs.crt /etc/ssl/certs/ca-certificates.crt
 
-# https://github.com/GoogleContainerTools/distroless?tab=readme-ov-file#what-images-are-available
-# https://github.com/GoogleContainerTools/distroless?tab=readme-ov-file#debug-images
-#FROM gcr.io/distroless/static-debian12:nonroot
-FROM gcr.io/distroless/static-debian12
-#FROM gcr.io/distroless/static-debian12:debug
-#FROM scratch
-
+FROM scratch
 # becomes a single layer
 COPY --from=arrange / /
 

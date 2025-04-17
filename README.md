@@ -1,22 +1,33 @@
 # go_nix_simple
 
 This is an example repo that shows building a simple go program, and then building small docker images using:
-- Nix with standard buildGoModule ( no sharing of dependencies between packages that depend on the same Go module )
-- Docker build with docker caching
-- Docker build with athens GO_PROXY caching
-- Nix buildGoApplication ( gomod2nix )
 
 ## Summary
 
-| Build Method                          | Build Time | Build Time Cached | Image Size  |
-| :------------------------------------ | :--------- | :---------------- | :---------- |
-| Nix buildGoModule                     | 20699 ms   | 3548 ms           | 12.8 MB     |
-| Docker built docker cache             | 9319 ms    | 1524 ms           | 14.3 MB     |  <--- docker cache is fast!
-| Docker built athens cache             | 9319 ms    | 8107 ms           | 14.3 MB     |
-| Nix buildGoApplication ( gomod2nix )  | 23296 ms   | 3567 ms           | 54.6 MB     |  <--- image is large! :(
+| Build Method | Base container | Caching | Nix module         | Time ms       | Time Cached ms | Image Size MB |
+|--------------|----------------|---------|------------------- |---------------|--------------- |-------------- |
+| Nix          | distroless     | Nix     | buildGoModule      | 20699         | 3548           | 12.8          |
+| Nix          | scratch        | Nix     | buildGoModule      | 20699         | 3548           | 12.8          |
+| Docker       | distroless     | Docker  | n/a                | 9319          | 1524           | 14.3          | <--- docker cache is fast!
+| Docker       | distroless     | Athens  | n/a                | 9319          | 8107           | 14.3          |
+| Nix          | distroless     | Nix     | buildGoApplication | 23296         | 3567           | 54.6          | <--- image is large! :(
+| Nix          | scratch        | Nix     | buildGoApplication | 23296         | 3567           | 54.6          | <--- image is large! :(
 
+- distroless = [gcr.io/distroless/static-debian12](https://github.com/GoogleContainerTools/distroless?tab=readme-ov-file#what-images-are-available)
+- scratch = [https://hub.docker.com/_/scratch](https://hub.docker.com/_/scratch)
+- buildGoApplication ( [gomod2nix](https://github.com/nix-community/gomod2nix) )
+- [buildGoModule](https://nixos.org/manual/nixpkgs/stable/#sec-language-go)
 
 Please see the [Makefile](./Makefile) for how to run this
+
+## Quick Start
+
+```
+git clone https://github.com/randomizedcoder/go_nix_simple/
+cd go_nix_simple
+make deploy_athens             <--- optional
+make
+```
 
 ## Performance tips
 
@@ -480,6 +491,63 @@ https://github.com/NixOS/nixpkgs/blob/589c31662739027f6b802f138fd12f4493ad68de/p
 
 https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/go/module.nix#L105
 
+## netGo && osusergo
+Disabling cgo should results in -tags=netgo
+```
+The decision can also be forced while building the Go source tree by setting the netgo or netcgo build tag. The netgo build tag disables entirely the use of the native (CGO) resolver, meaning the Go resolver is the only one that can be used. With the netcgo build tag the native and the pure Go resolver are compiled into the binary, but the native (CGO) resolver is preferred over the Go resolver. With netcgo, the Go resolver can still be forced at runtime with GODEBUG=netdns=go.
+```
+https://pkg.go.dev/net
+
+
+And disabling cgo will
+```
+When cgo is available, and the required routines are implemented in libc for a particular platform, cgo-based (libc-backed) code is used. This can be overridden by using osusergo build tag, which enforces the pure Go implementation.
+```
+https://pkg.go.dev/os/user#pkg-overview
+
+```
+// initConfVal initializes confVal based on the environment
+// that will not change during program execution.
+func initConfVal() {
+	dnsMode, debugLevel := goDebugNetDNS()
+	confVal.netGo = netGoBuildTag || dnsMode == "go"
+	confVal.netCgo = netCgoBuildTag || dnsMode == "cgo"
+	confVal.dnsDebugLevel = debugLevel
+
+	if confVal.dnsDebugLevel > 0 {
+		defer func() {
+			if confVal.dnsDebugLevel > 1 {
+				println("go package net: confVal.netCgo =", confVal.netCgo, " netGo =", confVal.netGo)
+			}
+			if dnsMode != "go" && dnsMode != "cgo" && dnsMode != "" {
+				println("go package net: GODEBUG=netdns contains an invalid dns mode, ignoring it")
+			}
+			switch {
+			case netGoBuildTag || !cgoAvailable:
+				if dnsMode == "cgo" {
+					println("go package net: ignoring GODEBUG=netdns=cgo as the binary was compiled without support for the cgo resolver")
+				} else {
+					println("go package net: using the Go DNS resolver")
+				}
+			case netCgoBuildTag:
+				if dnsMode == "go" {
+					println("go package net: GODEBUG setting forcing use of the Go resolver")
+				} else {
+					println("go package net: using the cgo DNS resolver")
+				}
+			default:
+				if dnsMode == "go" {
+					println("go package net: GODEBUG setting forcing use of the Go resolver")
+				} else if dnsMode == "cgo" {
+					println("go package net: GODEBUG setting forcing use of the cgo resolver")
+				} else {
+					println("go package net: dynamic selection of DNS resolver")
+				}
+			}
+		}()
+	}
+```
+https://cs.opensource.google/go/go/+/master:src/net/conf.go;l=85?q=netgo&ss=go%2Fgo
 
 
 ## Nix Go links
@@ -506,3 +574,10 @@ https://spacekookie.de/blog/ocitools-in-nixos/
 https://www.gopaddy.ch/en/posts/b14028e/
 
 https://grahamc.com/blog/nix-and-layered-docker-images/
+
+## Small golang containers
+
+https://github.com/Snawoot/opera-proxy/blob/master/Dockerfile
+
+https://laurentsv.com/blog/2024/06/25/stop-the-go-and-docker-madness.html
+

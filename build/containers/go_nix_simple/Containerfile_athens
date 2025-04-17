@@ -1,5 +1,5 @@
 #
-# ./build/containers/go_nix_simple/Containerfile
+# ./build/containers/go_nix_simple/Containerfile_athens
 #
 
 # Passed in variables
@@ -43,19 +43,28 @@ COPY . .
 # https://go.dev/ref/mod#private-module-proxy-private
 RUN GOPROXY=http://localhost:8888,https://proxy.golang.org,direct \
     CGO_ENABLED=0 go build \
+    -trimpath \
+    -tags=netgo,osusergo \
+    -ldflags="-s -w" \
     -o /go/bin/go_nix_simple \
     ./cmd/go_nix_simple/go_nix_simple.go
 
 # https://github.com/docker-archive/compose-cli/blob/main/Dockerfile#L31
+
+FROM scratch AS arrange
+COPY --from=build --chmod=544 /go/bin/go_nix_simple /
+COPY --from=build --chmod=444 /go/src/VERSION /
 
 # https://github.com/GoogleContainerTools/distroless?tab=readme-ov-file#what-images-are-available
 # https://github.com/GoogleContainerTools/distroless?tab=readme-ov-file#debug-images
 #FROM gcr.io/distroless/static-debian12:nonroot
 FROM gcr.io/distroless/static-debian12
 #FROM gcr.io/distroless/static-debian12:debug
-#FROM scratch
-COPY --from=build --chmod=544 /go/bin/go_nix_simple /
-COPY --from=build --chmod=444 /go/src/VERSION /
+
+# becomes a single layer
+COPY --from=arrange / /
+
+USER 9999:9999
 
 # Prometheus
 EXPOSE 9108
