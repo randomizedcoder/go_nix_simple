@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	sleepTimeCst = 10 * time.Second
+	sleepTimeCst = 5 * time.Second
 
 	promListenCst           = ":9108"
 	promPathCst             = "/metrics"

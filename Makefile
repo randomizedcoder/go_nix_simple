@@ -134,6 +134,7 @@ builddocker_go-nix-simple-distroless-athens:
 	echo "[$($(TIMESTAMP))] Starting $@..."; \
 	echo "================================"; \
 	echo "Make builddocker_go_nix_simple randomizedcoder/go-nix-simple-distroless-athens:${VERSION}"; \
+	#--progress=plain \
 	docker build \
 		--network=host \
 		--build-arg MYPATH=${MYPATH} \

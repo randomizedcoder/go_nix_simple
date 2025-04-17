@@ -581,3 +581,6 @@ https://github.com/Snawoot/opera-proxy/blob/master/Dockerfile
 
 https://laurentsv.com/blog/2024/06/25/stop-the-go-and-docker-madness.html
 
+## UPX Shrinker
+
+https://words.filippo.io/shrink-your-go-binaries-with-this-one-weird-trick/
