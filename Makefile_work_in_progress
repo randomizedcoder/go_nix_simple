@@ -1,0 +1,448 @@
+#
+# /go-nix-simple/Makefile
+#
+
+VERSION := $(shell cat VERSION)
+LOCAL_MAJOR_VERSION := $(word 1,$(subst ., ,$(VERSION)))
+LOCAL_MINOR_VERSION := $(word 2,$(subst ., ,$(VERSION)))
+LOCAL_PATCH_VERSION := $(word 3,$(subst ., ,$(VERSION)))
+SHELL := /usr/bin/env bash
+.SHELLFLAGS := -eu -o pipefail -c
+
+MYPATH = $(shell pwd)
+COMMIT := $(shell git describe --always)
+DATE := $(shell date -u +"%Y-%m-%d-%H:%M")
+
+TIMESTAMP := date +"%Y-%m-%d %H:%M:%S.%3N"
+
+# --- New: Summary file ---
+SUMMARY_FILE := .build_summary.tmp
+
+# Fake targets
+.PHONY: all nix_build_go-nix-simple nix_build_docker nix_build_docker_scratch \
+	nix_build_docker_trace nix_build_docker_load gomod2nix \
+	nix_build_docker_gomod2nix nix_build_docker_gomod2nix_load \
+	builddocker_go-nix-simple-distroless \
+	builddocker_go-nix-simple-distroless-athens \
+	builddocker_go-nix-simple-distroless-scratch \
+	deploy_athens down_athens athens_traffic nix_build_athens run_athens ls \
+	dive dive-distroless run run-distroless curl prepare clear_go_mod_cache \
+	go_glean flake_metadata flake_show \
+	summary clean_summary # <-- Add summary targets
+
+# --- Modified: all target ---
+all: clean_summary \
+	nix_build_docker nix_build_docker_load \
+	nix_build_docker_upx nix_build_docker_load \
+	nix_build_docker_scratch nix_build_docker_load \
+	builddocker_go-nix-simple-distroless \
+	builddocker_go-nix-simple-distroless-athens \
+	builddocker_go-nix-simple-scratch \
+	builddocker_go-nix-simple-upx \
+	gomod2nix \
+	ls \
+	summary # <-- Run summary at the end
+
+# --- New: Target to clean summary file ---
+clean_summary:
+	rm -f $(SUMMARY_FILE)
+
+#--------------------------
+# nix build
+
+# --- Modified: nix_build_go-nix-simple ---
+nix_build_go-nix-simple:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	nix build .#go-nix-simple; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},N/A,N/A" >> $(SUMMARY_FILE); \ # Record duration only
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+# --- Modified: nix_build_docker ---
+nix_build_docker:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	nix build .; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	# Record duration only
+	echo "$@,$${_duration_ms},N/A,N/A" >> $(SUMMARY_FILE); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+# --- Modified: nix_build_docker_upx ---
+nix_build_docker_upx:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	nix build .#docker-image-upx; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},N/A,N/A" >> $(SUMMARY_FILE); \ # Record duration only
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+# --- Modified: nix_build_docker_scratch ---
+nix_build_docker_scratch:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	nix build .#docker-image-scratch; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},N/A,N/A" >> $(SUMMARY_FILE); \ # Record duration only
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+# --- Modified: nix_build_docker_trace (No change needed unless you want its duration too) ---
+nix_build_docker_trace:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	nix build . --show-trace; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},N/A,N/A" >> $(SUMMARY_FILE); \ # Optionally record duration
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+# --- Modified: nix_build_docker_load ---
+nix_build_docker_load:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	_loaded_image_line=""; _loaded_image_tag="N/A"; _image_size="N/A"; \
+	_loaded_image_line=$$(docker load < result 2>/dev/null | tee /dev/stderr | grep 'Loaded image:'); \
+	if [[ -n "$${_loaded_image_line}" ]]; then \
+		_loaded_image_tag=$$(echo "$${_loaded_image_line}" | sed 's/Loaded image: //'); \
+		sleep 1; \ # Give daemon a moment
+		_image_size=$$(docker image inspect --format='{{.Size}}' "$${_loaded_image_tag}" 2>/dev/null || echo "Error"); \
+		if [[ "$${_image_size}" == "Error" ]]; then _image_size="N/A"; fi; \
+	else \
+		echo "[$($(TIMESTAMP))] Failed to load image or capture tag from ./result"; \
+		_loaded_image_tag="(load failed)"; \
+	fi; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},$${_loaded_image_tag:-N/A},$${_image_size:-N/A}" >> $(SUMMARY_FILE); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms. Loaded: $${_loaded_image_tag:-None}. Size: $${_image_size:-N/A}";
+
+#---------
+# gomod2nix
+# --- Modified: Treat gomod2nix like other build/load pairs ---
+gomod2nix: nix_build_docker_gomod2nix nix_build_docker_gomod2nix_load
+
+# --- Modified: nix_build_docker_gomod2nix ---
+nix_build_docker_gomod2nix:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	nix build .#docker-image-gomod2nix; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},N/A,N/A" >> $(SUMMARY_FILE); \ # Record duration only
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+# --- Modified: nix_build_docker_gomod2nix_load (Similar to nix_build_docker_load) ---
+nix_build_docker_gomod2nix_load:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	_loaded_image_line=""; _loaded_image_tag="N/A"; _image_size="N/A"; \
+	_loaded_image_line=$$(docker load < result 2>/dev/null | tee /dev/stderr | grep 'Loaded image:'); \
+	if [[ -n "$${_loaded_image_line}" ]]; then \
+		_loaded_image_tag=$$(echo "$${_loaded_image_line}" | sed 's/Loaded image: //'); \
+		sleep 1; \ # Give daemon a moment
+		_image_size=$$(docker image inspect --format='{{.Size}}' "$${_loaded_image_tag}" 2>/dev/null || echo "Error"); \
+		if [[ "$${_image_size}" == "Error" ]]; then _image_size="N/A"; fi; \
+	else \
+		echo "[$($(TIMESTAMP))] Failed to load image or capture tag from ./result (gomod2nix)"; \
+		_loaded_image_tag="(load failed)"; \
+	fi; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},$${_loaded_image_tag:-N/A},$${_image_size:-N/A}" >> $(SUMMARY_FILE); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms. Loaded: $${_loaded_image_tag:-None}. Size: $${_image_size:-N/A}";
+
+#--------------------------
+# docker build
+
+# --- Modified: builddocker_go-nix-simple-distroless ---
+builddocker_go-nix-simple-distroless:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	echo "================================"; \
+	_image_tag="randomizedcoder/docker-go-nix-simple-distroless:${VERSION}"; \
+	_latest_tag="randomizedcoder/docker-go-nix-simple-distroless:latest"; \
+	echo "Make builddocker_go_nix_simple $${_image_tag}"; \
+	docker build \
+		--network=host \
+		--build-arg MYPATH=${MYPATH} \
+		--build-arg COMMIT=${COMMIT} \
+		--build-arg DATE=${DATE} \
+		--build-arg VERSION=${VERSION} \
+		--file build/containers/go_nix_simple/Containerfile \
+		--tag "$${_image_tag}" \
+		--tag "$${_latest_tag}" \
+		${MYPATH}; \
+	_build_exit_code=$$?; \
+	_image_size="N/A"; \
+	if [[ $$_build_exit_code -eq 0 ]]; then \
+		sleep 1; \ # Give daemon a moment
+		_image_size=$$(docker image inspect --format='{{.Size}}' "$${_image_tag}" 2>/dev/null || echo "Error"); \
+		if [[ "$${_image_size}" == "Error" ]]; then _image_size="N/A"; fi; \
+	else \
+		echo "[$($(TIMESTAMP))] Docker build failed for $@"; \
+		_image_tag="$${_image_tag} (build failed)"; \
+	fi; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},$${_image_tag},$${_image_size}" >> $(SUMMARY_FILE); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms. Image: $${_image_tag}. Size: $${_image_size:-N/A}"; \
+	exit $$_build_exit_code
+
+# --- Modified: builddocker_go-nix-simple-distroless-athens ---
+builddocker_go-nix-simple-distroless-athens:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	echo "================================"; \
+	_image_tag="randomizedcoder/docker-go-nix-simple-distroless-athens:${VERSION}"; \
+	_latest_tag="randomizedcoder/docker-go-nix-simple-distroless-athens:latest"; \
+	echo "Make builddocker_go_nix_simple $${_image_tag}"; \
+	docker build \
+		--progress=plain \
+		--network=host \
+		--build-arg MYPATH=${MYPATH} \
+		--build-arg COMMIT=${COMMIT} \
+		--build-arg DATE=${DATE} \
+		--build-arg VERSION=${VERSION} \
+		--file build/containers/go_nix_simple/Containerfile_athens \
+		--tag "$${_image_tag}" \
+		--tag "$${_latest_tag}" \
+		${MYPATH}; \
+	_build_exit_code=$$?; \
+	_image_size="N/A"; \
+	if [[ $$_build_exit_code -eq 0 ]]; then \
+		sleep 1; \
+		_image_size=$$(docker image inspect --format='{{.Size}}' "$${_image_tag}" 2>/dev/null || echo "Error"); \
+		if [[ "$${_image_size}" == "Error" ]]; then _image_size="N/A"; fi; \
+	else \
+		echo "[$($(TIMESTAMP))] Docker build failed for $@"; \
+		_image_tag="$${_image_tag} (build failed)"; \
+	fi; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},$${_image_tag},$${_image_size}" >> $(SUMMARY_FILE); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms. Image: $${_image_tag}. Size: $${_image_size:-N/A}"; \
+	exit $$_build_exit_code
+
+# --- Modified: builddocker_go-nix-simple-scratch ---
+builddocker_go-nix-simple-scratch:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	echo "================================"; \
+	_image_tag="randomizedcoder/docker-go-nix-simple-scratch:${VERSION}"; \
+	_latest_tag="randomizedcoder/docker-go-nix-simple-scratch:latest"; \
+	echo "Make builddocker_go_nix_simple $${_image_tag}"; \
+	docker build \
+		--network=host \
+		--build-arg MYPATH=${MYPATH} \
+		--build-arg COMMIT=${COMMIT} \
+		--build-arg DATE=${DATE} \
+		--build-arg VERSION=${VERSION} \
+		--file build/containers/go_nix_simple/Containerfile_scratch \
+		--tag "$${_image_tag}" \
+		--tag "$${_latest_tag}" \
+		${MYPATH}; \
+	_build_exit_code=$$?; \
+	_image_size="N/A"; \
+	if [[ $$_build_exit_code -eq 0 ]]; then \
+		sleep 1; \
+		_image_size=$$(docker image inspect --format='{{.Size}}' "$${_image_tag}" 2>/dev/null || echo "Error"); \
+		if [[ "$${_image_size}" == "Error" ]]; then _image_size="N/A"; fi; \
+	else \
+		echo "[$($(TIMESTAMP))] Docker build failed for $@"; \
+		_image_tag="$${_image_tag} (build failed)"; \
+	fi; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},$${_image_tag},$${_image_size}" >> $(SUMMARY_FILE); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms. Image: $${_image_tag}. Size: $${_image_size:-N/A}"; \
+	exit $$_build_exit_code
+
+# --- Modified: builddocker_go-nix-simple-upx ---
+builddocker_go-nix-simple-upx:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	echo "================================"; \
+	_image_tag="randomizedcoder/docker-go-nix-simple-scratch-upx:${VERSION}"; \
+	_latest_tag="randomizedcoder/docker-go-nix-simple-scratch-upx:latest"; \
+	echo "Make builddocker_go_nix_simple $${_image_tag}"; \
+	docker build \
+		--network=host \
+		--build-arg MYPATH=${MYPATH} \
+		--build-arg COMMIT=${COMMIT} \
+		--build-arg DATE=${DATE} \
+		--build-arg VERSION=${VERSION} \
+		--file build/containers/go_nix_simple/Containerfile_upx \
+		--tag "$${_image_tag}" \
+		--tag "$${_latest_tag}" \
+		${MYPATH}; \
+	_build_exit_code=$$?; \
+	_image_size="N/A"; \
+	if [[ $$_build_exit_code -eq 0 ]]; then \
+		sleep 1; \
+		_image_size=$$(docker image inspect --format='{{.Size}}' "$${_image_tag}" 2>/dev/null || echo "Error"); \
+		if [[ "$${_image_size}" == "Error" ]]; then _image_size="N/A"; fi; \
+	else \
+		echo "[$($(TIMESTAMP))] Docker build failed for $@"; \
+		_image_tag="$${_image_tag} (build failed)"; \
+	fi; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},$${_image_tag},$${_image_size}" >> $(SUMMARY_FILE); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms. Image: $${_image_tag}. Size: $${_image_size:-N/A}"; \
+	exit $$_build_exit_code
+
+# ... (Keep docker compose athens, nix build athens, inspect targets etc. as they are, unless you want durations for them too) ...
+
+# --- Modified: ls target (Optional: Add duration) ---
+ls:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	docker image ls randomizedcoder/nix-go-nix-simple-distroless; \
+	docker image ls randomizedcoder/nix-go-nix-simple-scratch; \
+	docker image ls randomizedcoder/gomod2nix-go-nix-simple-scratch; \
+	docker image ls randomizedcoder/docker-go-nix-simple-distroless; \
+	docker image ls randomizedcoder/docker-go-nix-simple-distroless-athens; \
+	docker image ls randomizedcoder/docker-go-nix-simple-distroless-scratch; \
+	docker image ls randomizedcoder/gomod2nix-go-nix-simple-scratch; \
+	@echo "===="; \
+	docker image ls | grep go-nix-simple; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "$@,$${_duration_ms},N/A,N/A" >> $(SUMMARY_FILE); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+
+
+# ... (Keep dive, run, curl, prepare, clear_go_mod_cache, go_glean, flake commands) ...
+
+# --- New: Summary Target ---
+summary:
+	@echo ""
+	@echo "========================================= Build Summary =========================================="
+	@echo "| Target                                 | Duration (ms) | Image Tag / Info                           | Size       |"
+	@echo "|----------------------------------------|---------------|--------------------------------------------|------------|"
+	@if [ -f $(SUMMARY_FILE) ]; then \
+		LC_NUMERIC=C awk -F',' '{ \
+			target=$1; \
+			duration=$2; \
+			tag=$3; \
+			size_bytes=$4; \
+			size_human="N/A"; \
+			\
+			if (tag == "N/A") { tag = "-"; } \
+			if (size_bytes == "N/A") { \
+				size_human = "-"; \
+			} else if (size_bytes == "Error") { \
+				size_human = "Error"; \
+			} else if (size_bytes ~ /^[0-9]+$$/) { \
+				if (size_bytes > 1024*1024*1024) { \
+					size_human = sprintf("%.2f GiB", size_bytes / 1024 / 1024 / 1024); \
+				} else if (size_bytes > 1024*1024) { \
+					size_human = sprintf("%.2f MiB", size_bytes / 1024 / 1024); \
+				} else if (size_bytes > 1024) { \
+					size_human = sprintf("%.2f KiB", size_bytes / 1024); \
+				} else { \
+					size_human = sprintf("%d B", size_bytes); \
+				} \
+			} else { \
+				size_human = "?"; \
+			} \
+			\
+			printf "| %-38s | %-13s | %-42s | %-10s |\n", target, duration, tag, size_human; \
+		}' $(SUMMARY_FILE); \
+	else \
+		echo "| No summary data found ($(SUMMARY_FILE) missing).                                                     |"; \
+	fi; \
+	echo "=================================================================================================="
+
+	#--------------------------
+# docker compose athens
+
+# https://docs.docker.com/engine/reference/commandline/docker/
+# https://docs.docker.com/compose/reference/
+deploy_athens:
+	@echo "================================"
+	@echo "Make deploy_athens"
+	docker compose \
+		--file build/containers/athens/docker-compose-athens.yml \
+		up -d --remove-orphans
+
+down_athens:
+	@echo "================================"
+	@echo "Make down_athens"
+	docker compose \
+		--file build/containers/athens/docker-compose-athens.yml \
+		down
+
+athens_traffic:
+	sudo tcpdump -ni any port 8888
+
+#--------------------------
+# nix build athens docker container
+
+nix_build_athens:
+	nix build .#athens-nix-image
+	docker load < result
+
+run_athens:
+	docker run -d -p 8888:8888 randomizedcoder/athens-nix:latest
+
+#--------------------------
+# inspect
+
+# ls:
+# 	docker image ls randomizedcoder/nix-go-nix-simple-distroless;
+# 	docker image ls randomizedcoder/nix-go-nix-simple-scratch;
+# 	docker image ls randomizedcoder/gomod2nix-go-nix-simple-scratch
+# 	docker image ls randomizedcoder/docker-go-nix-simple-distroless;
+# 	docker image ls randomizedcoder/docker-go-nix-simple-distroless-athens;
+# 	docker image ls randomizedcoder/docker-go-nix-simple-distroless-scratch;
+# 	docker image ls randomizedcoder/gomod2nix-go-nix-simple-scratch;
+# 	@echo "===="
+# 	docker image ls | grep go-nix-simple
+
+dive:
+	dive randomizedcoder/go-nix-simple:latest
+
+dive-distroless:
+	dive randomizedcoder/go-nix-simple-distroless:latest
+
+run:
+	docker run -d -p 9108:9108 randomizedcoder/go-nix-simple:latest
+
+run-distroless:
+	docker run -d -p 9108:9108 randomizedcoder/go-nix-simple-distroless:latest
+
+curl:
+	curl http://localhost:9108/metrics
+
+# https://ryantm.github.io/nixpkgs/builders/images/dockertools/#ssec-pkgs-dockerTools-fetchFromRegistry
+# https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/docker/nix-prefetch-docker
+prepare:
+	nix-shell -p nix-prefetch-docker
+	nix-prefetch-docker --image-name gcr.io/distroless/static-debian12 --image-tag latest
+
+#--------------------------
+# clear go mod cache
+
+clear_go_mod_cache:
+	sudo rm -rf /home/das/go/pkg/mod/
+
+go_glean:
+	go clean -modcache
+
+#--------------------------
+# flake commands
+
+flake_metadata:
+	nix flake metadata
+
+flake_show:
+	nix flake show
+
+
+# end
