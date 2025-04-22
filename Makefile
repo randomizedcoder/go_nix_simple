@@ -16,24 +16,30 @@ DATE := $(shell date -u +"%Y-%m-%d-%H:%M")
 TIMESTAMP := date +"%Y-%m-%d %H:%M:%S.%3N"
 
 # Fake targets
-.PHONY: all nix_build_go-nix-simple nix_build_docker nix_build_docker_scratch \
-	nix_build_docker_trace nix_build_docker_load gomod2nix \
-	nix_build_docker_gomod2nix nix_build_docker_gomod2nix_load \
-	builddocker_go-nix-simple-distroless \
-	builddocker_go-nix-simple-distroless-athens \
-	builddocker_go-nix-simple-distroless-scratch \
-	deploy_athens down_athens athens_traffic nix_build_athens run_athens ls \
-	dive dive-distroless run run-distroless curl prepare clear_go_mod_cache \
-	go_glean flake_metadata flake_show
-
-all: nix_build_docker nix_build_docker_load \
-	nix_build_docker_upx nix_build_docker_load \
-	nix_build_docker_scratch nix_build_docker_load \
+.PHONY: all nix_build_go-nix-simple nix_build_docker nix_build_docker_upx \
+	nix_build_docker_scratch nix_build_docker_trace nix_build_docker_load \
+	gomod2nix nix_build_docker_gomod2nix nix_build_docker_gomod2nix_load \
 	builddocker_go-nix-simple-distroless \
 	builddocker_go-nix-simple-distroless-athens \
 	builddocker_go-nix-simple-scratch \
 	builddocker_go-nix-simple-upx \
+	builddocker_go-nix-simple-no-cache \
+	builddocker_go-nix-simple-http-cache \
+	deploy_athens down_athens athens_traffic nix_build_athens run_athens ls \
+	dive dive-distroless run run-distroless curl prepare clear_go_mod_cache \
+	go_glean flake_metadata flake_show
+
+
+all: nix_build_docker nix_build_docker_load \
+	nix_build_docker_upx nix_build_docker_load \
+	nix_build_docker_scratch nix_build_docker_load \
 	gomod2nix \
+	builddocker_go-nix-simple-distroless \
+	builddocker_go-nix-simple-distroless-athens \
+	builddocker_go-nix-simple-scratch \
+	builddocker_go-nix-simple-upx \
+	builddocker_go-nix-simple-no-cache \
+	builddocker_go-nix-simple-http-cache \
 	ls
 
 #--------------------------
@@ -114,7 +120,7 @@ builddocker_go-nix-simple-distroless:
 	@_start_time_ns=$$(date +%s%N); \
 	echo "[$($(TIMESTAMP))] Starting $@..."; \
 	echo "================================"; \
-	echo "Make builddocker_go_nix_simple randomizedcoder/go-nix-simple-distroless:${VERSION}"; \
+	echo "Make builddocker_go-nix-simple-distroless randomizedcoder/go-nix-simple-distroless:${VERSION}"; \
 	docker build \
 		--network=host \
 		--build-arg MYPATH=${MYPATH} \
@@ -133,9 +139,10 @@ builddocker_go-nix-simple-distroless-athens:
 	@_start_time_ns=$$(date +%s%N); \
 	echo "[$($(TIMESTAMP))] Starting $@..."; \
 	echo "================================"; \
-	echo "Make builddocker_go_nix_simple randomizedcoder/go-nix-simple-distroless-athens:${VERSION}"; \
+	echo "Make builddocker_go-nix-simple-distroless-athens randomizedcoder/go-nix-simple-distroless-athens:${VERSION}"; \
 	#--progress=plain \
 	docker build \
+		--progress=plain \
 		--network=host \
 		--build-arg MYPATH=${MYPATH} \
 		--build-arg COMMIT=${COMMIT} \
@@ -153,7 +160,7 @@ builddocker_go-nix-simple-scratch:
 	@_start_time_ns=$$(date +%s%N); \
 	echo "[$($(TIMESTAMP))] Starting $@..."; \
 	echo "================================"; \
-	echo "Make builddocker_go_nix_simple randomizedcoder/docker-go-nix-simple-scratch:${VERSION}"; \
+	echo "Make builddocker_go-nix-simple-scratch randomizedcoder/docker-go-nix-simple-scratch:${VERSION}"; \
 	docker build \
 		--network=host \
 		--build-arg MYPATH=${MYPATH} \
@@ -172,7 +179,7 @@ builddocker_go-nix-simple-upx:
 	@_start_time_ns=$$(date +%s%N); \
 	echo "[$($(TIMESTAMP))] Starting $@..."; \
 	echo "================================"; \
-	echo "Make builddocker_go_nix_simple randomizedcoder/docker-go-nix-simple-upx:${VERSION}"; \
+	echo "Make builddocker_go-nix-simple-upx randomizedcoder/docker-go-nix-simple-upx:${VERSION}"; \
 	docker build \
 		--network=host \
 		--build-arg MYPATH=${MYPATH} \
@@ -182,6 +189,46 @@ builddocker_go-nix-simple-upx:
 		--file build/containers/go_nix_simple/Containerfile_upx \
 		--tag randomizedcoder/docker-go-nix-simple-scratch-upx:${VERSION} \
 		--tag randomizedcoder/docker-go-nix-simple-scratch-upx:latest \
+		${MYPATH}; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+# --progress=plain \
+
+builddocker_go-nix-simple-no-cache:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	echo "================================"; \
+	echo "Make builddocker_go-nix-simple-no-cache randomizedcoder/docker-go-nix-simple-no-cache:${VERSION}"; \
+	docker build \
+		--network=host \
+		--build-arg MYPATH=${MYPATH} \
+		--build-arg COMMIT=${COMMIT} \
+		--build-arg DATE=${DATE} \
+		--build-arg VERSION=${VERSION} \
+		--file build/containers/go_nix_simple/Containerfile_no_cache \
+		--tag randomizedcoder/docker-go-nix-simple-scratch-no-cache:${VERSION} \
+		--tag randomizedcoder/docker-go-nix-simple-scratch-no-cache:latest \
+		${MYPATH}; \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+# --progress=plain \
+
+builddocker_go-nix-simple-http-cache:
+	@_start_time_ns=$$(date +%s%N); \
+	echo "[$($(TIMESTAMP))] Starting $@..."; \
+	echo "================================"; \
+	echo "Make builddocker_go-nix-simple-http-cache randomizedcoder/docker-go-nix-simple-http-cache:${VERSION}"; \
+	docker build \
+		--network=host \
+		--build-arg MYPATH=${MYPATH} \
+		--build-arg COMMIT=${COMMIT} \
+		--build-arg DATE=${DATE} \
+		--build-arg VERSION=${VERSION} \
+		--file build/containers/go_nix_simple/Containerfile_http_cache \
+		--tag randomizedcoder/docker-go-nix-simple-scratch-http-cache:${VERSION} \
+		--tag randomizedcoder/docker-go-nix-simple-scratch-http-cache:latest \
 		${MYPATH}; \
 	_end_time_ns=$$(date +%s%N); \
 	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \

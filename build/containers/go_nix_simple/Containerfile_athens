@@ -12,7 +12,7 @@ ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETPLATFORM
 
-ARG GO_VERSION=1.24.1
+ARG GO_VERSION=1.24.2
 
 #https://github.com/GoogleContainerTools/distroless?tab=readme-ov-file#examples-with-docker
 FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION} AS build
@@ -41,7 +41,8 @@ COPY . .
 # https://go.dev/ref/mod
 # https://go.dev/ref/mod#module-proxy
 # https://go.dev/ref/mod#private-module-proxy-private
-RUN GOPROXY=http://localhost:8888,https://proxy.golang.org,direct \
+#RUN GOPROXY=http://localhost:8888,https://proxy.golang.org,direct \
+RUN GOPROXY=http://hp4.home:8888,https://proxy.golang.org,direct \
     CGO_ENABLED=0 go build \
     -trimpath \
     -tags=netgo,osusergo \

@@ -487,9 +487,12 @@ Actually, it's because it's disabled here:
 ```
 https://github.com/NixOS/nixpkgs/blob/589c31662739027f6b802f138fd12f4493ad68de/pkgs/build-support/go/module.nix#L180
 
-
-
 https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/go/module.nix#L105
+
+Athens usues
+https://github.com/krallin/tini
+https://github.com/gomods/athens/issues/1155
+https://github.com/golang/go/issues/23705
 
 ## netGo && osusergo
 Disabling cgo should results in -tags=netgo
