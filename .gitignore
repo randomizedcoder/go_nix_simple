@@ -6,9 +6,9 @@
 result
 
 # Bazel output directories
-bazel-bin/
-bazel-out/
-bazel-testlogs/
-bazel-*/ # Catches convenience symlinks like bazel-go_nix_simple
+bazel-bin
+bazel-out
+bazel-testlogs
+bazel-*
 
 # end
