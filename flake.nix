@@ -49,8 +49,8 @@
 
           # sha256-AAAA is to allow nix to calculate the NAR hash
           #vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-          vendorHash = "sha256-HE30rYfraiQVQrYDgZfRrEU1eoVwtlrr88Uvz/rupx8=";
-          #vendorHash = "sha256-caiTCIpCDiSspjLd9JI/vr0Mlhud9uNtZ+GtGoTUraU=";
+          #vendorHash = "sha256-HE30rYfraiQVQrYDgZfRrEU1eoVwtlrr88Uvz/rupx8=";
+          vendorHash = "sha256-J3kwzCP8O5UjA+bJBb5KHE1X8UKn70LbTmnAkw14Xlg=";
           # Or generate with: nix-prefetch-git --url <your-repo-url> --rev <commit-sha> | jq -r .hash
           # Or if you use go mod vendor:
           # vendorHash = "sha256:<hash-of-vendor-dir>"; # Calculate with nix-hash --type sha256 --base32 ./vendor

@@ -6,9 +6,14 @@ go_library(
     importpath = "github.com/randomizedcoder/go_nix_simple/cmd/go_nix_simple",
     visibility = ["//visibility:private"],
     deps = [
+        "@com_github_clickhouse_clickhouse_go_v2//:clickhouse-go",
+        "@com_github_grafana_pyroscope_go//:pyroscope-go",
+        "@com_github_nats_io_nats_go//:nats_go",
+        "@com_github_pkg_profile//:profile",
         "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_client_golang//prometheus/promauto",
         "@com_github_prometheus_client_golang//prometheus/promhttp",
+        "@com_github_redis_go_redis_v9//:go-redis",
     ],
 )
 
