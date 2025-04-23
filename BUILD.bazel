@@ -1,0 +1,8 @@
+# go_nix_simple/BUILD.bazel
+load("@bazel_gazelle//:def.bzl", "gazelle")
+
+# Gazelle configuration
+gazelle(
+    name = "gazelle",
+    prefix = "github.com/randomizedcoder/go_nix_simple",  # Your Go module path
+)

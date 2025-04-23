@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "go_nix_simple_lib",
+    srcs = ["go_nix_simple.go"],
+    importpath = "github.com/randomizedcoder/go_nix_simple/cmd/go_nix_simple",
+    visibility = ["//visibility:private"],
+    deps = [
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_client_golang//prometheus/promauto",
+        "@com_github_prometheus_client_golang//prometheus/promhttp",
+    ],
+)
+
+go_binary(
+    name = "go_nix_simple",
+    embed = [":go_nix_simple_lib"],
+    visibility = ["//visibility:public"],
+)

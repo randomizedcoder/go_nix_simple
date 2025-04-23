@@ -29,6 +29,13 @@ make deploy_athens             <--- optional
 make
 ```
 
+# Combinations and Permutation
+
+- Builder: Nix-buildGoModule, Nix-buildGoApplication, Docker-build, Bazel-build, Bazel-build-nix
+- Final base container: Distroless, Scratch
+- Caching: Docker, Athens, Nix, HTTP-cache, No-cache
+- Executable packer: UPX, none
+
 ## Performance tips
 
 Even if you aren't interested in Nix, some top tips for improving container build times for golang:
@@ -586,4 +593,6 @@ https://laurentsv.com/blog/2024/06/25/stop-the-go-and-docker-madness.html
 
 ## UPX Shrinker
 
+https://upx.github.io/
+https://sourceforge.net/projects/upx/
 https://words.filippo.io/shrink-your-go-binaries-with-this-one-weird-trick/

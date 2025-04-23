@@ -308,7 +308,7 @@ prepare:
 clear_go_mod_cache:
 	sudo rm -rf /home/das/go/pkg/mod/
 
-go_glean:
+go_clean:
 	go clean -modcache
 
 #--------------------------
@@ -319,5 +319,22 @@ flake_metadata:
 
 flake_show:
 	nix flake show
+
+#------------------------
+# bazel
+install_bazel:
+	go install github.com/bazelbuild/bazel-gazelle/cmd/gazelle@latest
+
+gazelle_init:
+	bazel run //:gazelle -- update-repos -from_file=go.mod
+
+gazelle_run:
+	bazel run //:gazelle
+
+bazel_build:
+	bazel build //cmd/go_nix_simple:go_nix_simple
+
+bazel_run:
+	bazel run //cmd/go_nix_simple:go_nix_simple
 
 # end
