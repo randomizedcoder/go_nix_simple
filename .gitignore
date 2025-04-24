@@ -2,6 +2,8 @@
 # .gitignore
 #
 
+output
+
 # nix output
 result
 

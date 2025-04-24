@@ -114,12 +114,12 @@ func main() {
 			// No extra flags needed for the RUN line itself
 		}
 		// Append the common part of the go build command
-		buildCmdBuilder.WriteString("CGO_ENABLED=0 go build \\\n    ")
-		buildCmdBuilder.WriteString("-trimpath \\\n    ")
-		buildCmdBuilder.WriteString("-tags=netgo,osusergo \\\n    ")
-		buildCmdBuilder.WriteString(`-ldflags="-s -w" \\\n    `) // Keep ldflags simple here unless they vary
-		buildCmdBuilder.WriteString("-o /go/bin/go_nix_simple \\\n    ")
-		buildCmdBuilder.WriteString("./cmd/go_nix_simple/go_nix_simple.go")
+		buildCmdBuilder.WriteString("CGO_ENABLED=0 go build \\\n")
+		buildCmdBuilder.WriteString("    -trimpath \\\n")
+		buildCmdBuilder.WriteString("    -tags=netgo,osusergo \\\n")
+		buildCmdBuilder.WriteString("    -ldflags=\"-s -w\" \\\n")
+		buildCmdBuilder.WriteString("    -o /go/bin/go_nix_simple \\\n")
+		buildCmdBuilder.WriteString("    ./cmd/go_nix_simple/go_nix_simple.go")
 		cfg.GoBuildCommand = buildCmdBuilder.String()
 		// --- End Go Build Command Determination ---
 
