@@ -1,4 +1,8 @@
+#
+# https://github.com/randomizedcoder/go_nix_simple
+#
 # flake.nix
+#
 {
   description = "A simple Go application packaged with Nix and Docker";
 
@@ -22,220 +26,234 @@
           inherit system;
           overlays = [ gomod2nix.overlays.default ];
         };
-        #pkgs = nixpkgs.legacyPackages.${system};
 
         appVersion = builtins.readFile ./VERSION;
 
-        etc-group = pkgs.runCommand "etc-group" {} ''
+        # Common ldflags for Go builds
+        commonLdflags = [ "-s" "-w" "-X main.version=${appVersion}" "-X main.commit=nix-build" "-X main.date=unknown" ];
+        # Common buildFlags for Go builds
+        commonBuildFlags = [ "-tags=netgo,osusergo" "-trimpath" ];
+
+        # --- Base Binary Derivations ---
+
+        # Binary built using Nixpkgs buildGoModule
+        binaryNixBuildGoModule = pkgs.buildGoModule { # Renamed from binaryNixDefault
+          pname = "go-nix-simple-buildgomodule"; # Adjusted pname
+          version = appVersion;
+          src = ./.;
+          subPackages = [ "cmd/go_nix_simple" ];
+          # Ensure this hash is updated when go.mod/go.sum changes
+          # Run: nix build .#binary-nix-buildgomodule --rebuild
+          vendorHash = "sha256-J3kwzCP8O5UjA+bJBb5KHE1X8UKn70LbTmnAkw14Xlg=";
+          ldflags = commonLdflags;
+          buildFlags = commonBuildFlags;
+          env = { CGO_ENABLED = 0; };
+        };
+
+        # Binary built using gomod2nix buildGoApplication
+        binaryNixGomod2nix = pkgs.buildGoApplication {
+          pname = "go-nix-simple-gomod2nix";
+          version = appVersion;
+          modules = ./gomod2nix.toml;
+          src = ./.;
+          ldflags = commonLdflags;
+          buildFlags = commonBuildFlags;
+          env = { CGO_ENABLED = 0; };
+          # Ensure output binary is named consistently for image Cmd
+          postInstall = ''
+            mv $out/bin/go-nix-simple-gomod2nix $out/bin/go_nix_simple
+          '';
+        };
+
+        # --- UPX Packed Binary Derivations ---
+
+        # UPX version of the buildGoModule binary
+        binaryNixBuildGoModuleUpx = pkgs.runCommand "go-nix-simple-buildgomodule-upx" { # Renamed
+          nativeBuildInputs = [ pkgs.upx ];
+          src = binaryNixBuildGoModule; # Depend on the renamed binary derivation
+        } ''
+          mkdir -p $out/bin
+          local orig_bin="$src/bin/go_nix_simple"
+          echo "Original size ($(basename $orig_bin)): $(ls -lh $orig_bin | awk '{print $5}')"
+          upx --best --lzma -o $out/bin/go_nix_simple "$orig_bin"
+          echo "Compressed size ($(basename $out/bin/go_nix_simple)): $(ls -lh $out/bin/go_nix_simple | awk '{print $5}')"
+          chmod +x $out/bin/go_nix_simple
+        '';
+
+        # UPX version of the gomod2nix binary
+        binaryNixGomod2nixUpx = pkgs.runCommand "go-nix-simple-gomod2nix-upx" {
+          nativeBuildInputs = [ pkgs.upx ];
+          src = binaryNixGomod2nix;
+        } ''
+          mkdir -p $out/bin
+          local orig_bin="$src/bin/go_nix_simple" # Assumes postInstall worked
+          echo "Original size ($(basename $orig_bin)): $(ls -lh $orig_bin | awk '{print $5}')"
+          upx --best --lzma -o $out/bin/go_nix_simple "$orig_bin"
+          echo "Compressed size ($(basename $out/bin/go_nix_simple)): $(ls -lh $out/bin/go_nix_simple | awk '{print $5}')"
+          chmod +x $out/bin/go_nix_simple
+        '';
+
+
+        # --- Common Image Components ---
+
+        etcFiles = pkgs.runCommand "etc-files" {} ''
           mkdir -p $out/etc
           echo 'nogroup:x:65534:' > $out/etc/group
-        '';
-        etc-passwd = pkgs.runCommand "etc-passwd" {} ''
-          mkdir -p $out/etc
-          # Format: username:password:UID:GID:GECOS:home_dir:shell
           echo 'nobody:x:65534:65534:Nobody:/:/sbin/nologin' > $out/etc/passwd
         '';
 
-        # Define the Go application build
-        # https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/go/module.nix
-        go-nix-simple-app = pkgs.buildGoModule {
-
-          pname = "go-nix-simple";
-          version = "0.1.1";
-
-          src = ./.;
-
-          subPackages = [ "cmd/go_nix_simple" ];
-
-          # sha256-AAAA is to allow nix to calculate the NAR hash
-          #vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-          #vendorHash = "sha256-HE30rYfraiQVQrYDgZfRrEU1eoVwtlrr88Uvz/rupx8=";
-          vendorHash = "sha256-J3kwzCP8O5UjA+bJBb5KHE1X8UKn70LbTmnAkw14Xlg=";
-          # Or generate with: nix-prefetch-git --url <your-repo-url> --rev <commit-sha> | jq -r .hash
-          # Or if you use go mod vendor:
-          # vendorHash = "sha256:<hash-of-vendor-dir>"; # Calculate with nix-hash --type sha256 --base32 ./vendor
-
-          # https://nixos.org/manual/nixpkgs/stable/#var-go-ldflags
-          # Add build tags and linker flags for static linking and size reduction
-          # buildFlags = [ "-tags=netgo" ];
-          ldflags = [ "-s" "-w" "-X main.version=${appVersion}" "-X main.commit=nix-build" "-X main.date=unknown" ];
-            #"-linkmode=external" "-extldflags=-static" # Force static linking
-          buildFlags = [ "-tags=netgo,osusergo" "-trimpath" ];
-          env = { CGO_ENABLED = 0; };
-            # Turns out that you can't use GOPROXY :(
-            # export GOPROXY="http://localhost:8888"
-            #GOPROXY = "http://localhost:8888";
-            #GOPROXY = "http://10.88.88.88:8888";
-            #GOPROXY = "http://127.0.0.1:3000";  #ATHENS_PORT=3000
-          # preBuild = ''
-          #   GOPROXY="http://localhost:8888,direct"
-          # '';
-          # https://discourse.nixos.org/t/rethink-goproxy/23534/10
-        };
-
-        # UPX Compression!
-        go-nix-simple-app-upx = pkgs.runCommand "go-nix-simple-upx" {
-            nativeBuildInputs = [ pkgs.upx ];
-            originalBinary = go-nix-simple-app;
-          } ''
-            # Create the output structure (mirroring buildGoModule)
-            mkdir -p $out/bin
-
-            # Copy the original binary to a temporary location within the build sandbox
-            cp $originalBinary/bin/go_nix_simple ./go_nix_simple_orig
-
-            echo "Original size:"
-            ls -lh ./go_nix_simple_orig
-
-            # Run UPX on the copied binary, outputting to the final destination
-            upx --best --lzma -o $out/bin/go_nix_simple ./go_nix_simple_orig
-
-            echo "Compressed size:"
-            ls -lh $out/bin/go_nix_simple
-
-            # Ensure the compressed binary is executable
-            chmod +x $out/bin/go_nix_simple
-          '';
-
-        go-nix-simple-gomod2nix = pkgs.buildGoApplication {
-          pname = "go-nix-simple-gomod2nix";
-          version = "0.1.1";
-          modules = ./gomod2nix.toml;
-          src = ./.;
-          ldflags = [ "-s" "-w" "-X main.version=${appVersion}" "-X main.commit=nix-build" "-X main.date=unknown" ];
-          buildFlags = [ "-tags=netgo,osusergo" "-trimpath" ];
-          CGO_ENABLED = 0;
-        };
-        # https://github.com/nix-community/gomod2nix/blob/master/docs/nix-reference.md#buildgoapplication
-
-        version-file-pkg = pkgs.runCommand "version-file" {} ''
+        versionFilePkg = pkgs.runCommand "version-file" {} ''
           mkdir -p $out
           cp ${./VERSION} $out/VERSION
         '';
 
-        # nix-shell -p nix-prefetch-docker
-        # nix-prefetch-docker --image-name gcr.io/distroless/static-debian12 --image-tag latest
-        distroless-base = pkgs.dockerTools.pullImage {
+        distrolessBase = pkgs.dockerTools.pullImage {
           imageName = "gcr.io/distroless/static-debian12";
           imageDigest = "sha256:3d0f463de06b7ddff27684ec3bfd0b54a425149d0f8685308b1fdf297b0265e9";
           sha256 = "0ajgz5slpdv42xqrildx850vp4cy6x44yj0hfz53raz3r971ikcf";
           finalImageTag = "latest";
         };
 
-        # Docker image build
-        go-nix-simple-image = pkgs.dockerTools.buildLayeredImage {
-          name = "randomizedcoder/nix-go-nix-simple-distroless";
-          tag = "latest";
-          # created = "now";
-          fromImage = distroless-base;
-          contents = [ go-nix-simple-app version-file-pkg etc-group etc-passwd ];
-          config = {
-            ExposedPorts = { "9108/tcp" = {}; };
-            Cmd = [ "${go-nix-simple-app}/bin/go_nix_simple" ];
-            WorkingDir = "/";
-            User = "nobody";
-          };
-        };
-
-        go-nix-simple-image-scratch = pkgs.dockerTools.buildLayeredImage {
-          name = "randomizedcoder/nix-go-nix-simple-scratch";
-          tag = "latest";
-          # created = "now";
-          # fromImage defaults to null, which is equivalent to SCRATCH
-          #fromImage = distroless-base;
-          contents = [ go-nix-simple-app version-file-pkg etc-group etc-passwd ];
-          config = {
-            ExposedPorts = { "9108/tcp" = {}; };
-            Cmd = [ "${go-nix-simple-app}/bin/go_nix_simple" ];
-            WorkingDir = "/";
-            User = "nobody";
-          };
-        };
-
-        go-nix-simple-image-upx = pkgs.dockerTools.buildLayeredImage {
-          name = "randomizedcoder/nix-go-nix-simple-scratch-upx";
-          tag = "latest";
-          #fromImage = distroless-base;
-          contents = [ go-nix-simple-app-upx version-file-pkg etc-group etc-passwd ];
-          config = {
-            ExposedPorts = { "9108/tcp" = {}; };
-            Cmd = [ "${go-nix-simple-app-upx}/bin/go_nix_simple" ];
-            WorkingDir = "/";
-            User = "nobody";
-          };
-        };
-
-        go-nix-simple-gomod2nix-image = pkgs.dockerTools.buildLayeredImage {
-          name = "randomizedcoder/gomod2nix-go-nix-simple-scratch";
-          tag = "latest";
-          # created = "now";
-          #fromImage = distroless-base;
-          contents = [ go-nix-simple-gomod2nix version-file-pkg etc-group etc-passwd ];
-          config = {
-            ExposedPorts = {
-              "9108/tcp" = {};
+        # Helper function to build layered images
+        buildImage = { name, tag ? "latest", baseImage ? null, binaryPkg, extraContents ? [] }:
+          pkgs.dockerTools.buildLayeredImage {
+            inherit name tag;
+            fromImage = baseImage;
+            contents = [ binaryPkg versionFilePkg etcFiles ] ++ extraContents;
+            config = {
+              User = "nobody";
+              WorkingDir = "/";
+              ExposedPorts = { "9108/tcp" = {}; };
+              Cmd = [ "${binaryPkg}/bin/go_nix_simple" ];
             };
-            Cmd = [ "${go-nix-simple-app}/bin/go_nix_simple" ];
-            WorkingDir = "/";
-            User = "nobody";
           };
+
+        # --- Image Derivations (All Combinations) ---
+
+        # Distroless + BuildGoModule + NoUPX
+        imageNixDistrolessBuildGoModuleNoupx = buildImage { # Renamed
+          name = "randomizedcoder/nix-go-nix-simple-distroless-buildgomodule-noupx"; # Renamed
+          baseImage = distrolessBase;
+          binaryPkg = binaryNixBuildGoModule; # Use renamed binary
         };
 
-        athens-nix-image = pkgs.dockerTools.buildLayeredImage {
+        # Distroless + BuildGoModule + UPX
+        imageNixDistrolessBuildGoModuleUpx = buildImage { # Renamed
+          name = "randomizedcoder/nix-go-nix-simple-distroless-buildgomodule-upx"; # Renamed
+          baseImage = distrolessBase;
+          binaryPkg = binaryNixBuildGoModuleUpx; # Use renamed binary
+        };
+
+        # Distroless + Gomod2nix + NoUPX
+        imageNixDistrolessGomod2nixNoupx = buildImage {
+          name = "randomizedcoder/nix-go-nix-simple-distroless-gomod2nix-noupx";
+          baseImage = distrolessBase;
+          binaryPkg = binaryNixGomod2nix;
+        };
+
+        # Distroless + Gomod2nix + UPX
+        imageNixDistrolessGomod2nixUpx = buildImage {
+          name = "randomizedcoder/nix-go-nix-simple-distroless-gomod2nix-upx";
+          baseImage = distrolessBase;
+          binaryPkg = binaryNixGomod2nixUpx;
+        };
+
+        # Scratch + BuildGoModule + NoUPX
+        imageNixScratchBuildGoModuleNoupx = buildImage { # Renamed
+          name = "randomizedcoder/nix-go-nix-simple-scratch-buildgomodule-noupx"; # Renamed
+          binaryPkg = binaryNixBuildGoModule; # Use renamed binary
+        };
+
+        # Scratch + BuildGoModule + UPX
+        imageNixScratchBuildGoModuleUpx = buildImage { # Renamed
+          name = "randomizedcoder/nix-go-nix-simple-scratch-buildgomodule-upx"; # Renamed
+          binaryPkg = binaryNixBuildGoModuleUpx; # Use renamed binary
+        };
+
+        # Scratch + Gomod2nix + NoUPX
+        imageNixScratchGomod2nixNoupx = buildImage {
+          name = "randomizedcoder/nix-go-nix-simple-scratch-gomod2nix-noupx";
+          binaryPkg = binaryNixGomod2nix;
+        };
+
+        # Scratch + Gomod2nix + UPX
+        imageNixScratchGomod2nixUpx = buildImage {
+          name = "randomizedcoder/nix-go-nix-simple-scratch-gomod2nix-upx";
+          binaryPkg = binaryNixGomod2nixUpx;
+        };
+
+        # --- Utility Images (Example: Athens) ---
+        athensNixImage = pkgs.dockerTools.buildLayeredImage {
           name = "randomizedcoder/athens-nix";
           tag = "latest";
-          fromImage = distroless-base;
-          contents = [ pkgs.athens etc-group etc-passwd ];
+          fromImage = distrolessBase;
+          contents = [ pkgs.athens etcFiles ];
           config = {
+            User = "nobody";
+            WorkingDir = "/data";
             ExposedPorts = { "8888/tcp" = {}; };
-            Cmd = [ "${pkgs.athens}/bin/athens" ];
+            Volumes = { "/data/athens" = {}; };
             Env = [
-              # Listen on all interfaces inside the container on port 3000
               "ATHENS_HOST=0.0.0.0"
               "ATHENS_PORT=8888"
-              # Use disk storage within the container
               "ATHENS_STORAGE_TYPE=disk"
-              # Define a path for the storage (will be created if it doesn't exist)
               "ATHENS_DISK_STORAGE_ROOT=/data/athens"
-              # Optional: Set log level
               "ATHENS_LOG_LEVEL=info"
             ];
-            WorkingDir = "/data";
-            Volumes = { "/data/athens" = {}; };
-            User = "nobody";
+            Cmd = [ "${pkgs.athens}/bin/athens" ];
           };
         };
 
       in
       {
-        packages.go-nix-simple = go-nix-simple-app;
-        packages.go-nix-simple-upx = go-nix-simple-app-upx;
-        packages.go-nix-simple-gomod2nix = go-nix-simple-gomod2nix;
-        packages.docker-image-scratch = go-nix-simple-image-scratch;
-        packages.docker-image = go-nix-simple-image;
-        packages.docker-image-upx = go-nix-simple-image-upx;
-        packages.docker-image-gomod2nix = go-nix-simple-gomod2nix-image;
-        packages.athens-nix-image = athens-nix-image;
+        # --- Consistent Package Naming ---
+        packages = {
+          # Binaries
+          binary-nix-buildgomodule = binaryNixBuildGoModule; # Renamed key
+          binary-nix-buildgomodule-upx = binaryNixBuildGoModuleUpx; # Renamed key
+          binary-nix-gomod2nix = binaryNixGomod2nix;
+          binary-nix-gomod2nix-upx = binaryNixGomod2nixUpx;
 
-        # `nix build`
-        packages.default = self.packages.${system}.docker-image;
+          # Images (All 8 combinations)
+          image-nix-distroless-buildgomodule-noupx = imageNixDistrolessBuildGoModuleNoupx; # Renamed key
+          image-nix-distroless-buildgomodule-upx = imageNixDistrolessBuildGoModuleUpx; # Renamed key
+          image-nix-distroless-gomod2nix-noupx = imageNixDistrolessGomod2nixNoupx;
+          image-nix-distroless-gomod2nix-upx = imageNixDistrolessGomod2nixUpx;
+          image-nix-scratch-buildgomodule-noupx = imageNixScratchBuildGoModuleNoupx; # Renamed key
+          image-nix-scratch-buildgomodule-upx = imageNixScratchBuildGoModuleUpx; # Renamed key
+          image-nix-scratch-gomod2nix-noupx = imageNixScratchGomod2nixNoupx;
+          image-nix-scratch-gomod2nix-upx = imageNixScratchGomod2nixUpx;
 
-        # `nix run`
-        apps.default = flake-utils.lib.mkApp {
-           drv = go-nix-simple-app;
-           exePath = "/bin/go_nix_simple";
+          # Utility Images
+          athens-nix-image = athensNixImage;
+
+          # Default package for `nix build`
+          default = self.packages.${system}.image-nix-distroless-buildgomodule-noupx; # Updated default
         };
 
-        apps.docker-image-tarball = flake-utils.lib.mkApp {
-          drv = go-nix-simple-image;
-          name = "docker-image-tarball";
-        };
-        apps.docker-image-upx-tarball = flake-utils.lib.mkApp {
-          drv = go-nix-simple-image-upx;
-          name = "docker-image-upx-tarball";
+        # --- Apps ---
+        apps = {
+          # Default app for `nix run`
+          default = flake-utils.lib.mkApp {
+            drv = self.packages.${system}.binary-nix-buildgomodule; # Updated default app
+          };
+          gomod2nix = flake-utils.lib.mkApp {
+            drv = self.packages.${system}.binary-nix-gomod2nix;
+          };
+
+          # Apps to output image tarballs (useful for loading into Docker)
+          # Update keys to match package names
+          image-distroless-buildgomodule-noupx-tarball = flake-utils.lib.mkApp { drv = self.packages.${system}.image-nix-distroless-buildgomodule-noupx; };
+          image-distroless-buildgomodule-upx-tarball = flake-utils.lib.mkApp { drv = self.packages.${system}.image-nix-distroless-buildgomodule-upx; };
+          image-distroless-gomod2nix-noupx-tarball = flake-utils.lib.mkApp { drv = self.packages.${system}.image-nix-distroless-gomod2nix-noupx; };
+          image-distroless-gomod2nix-upx-tarball = flake-utils.lib.mkApp { drv = self.packages.${system}.image-nix-distroless-gomod2nix-upx; };
+          image-scratch-buildgomodule-noupx-tarball = flake-utils.lib.mkApp { drv = self.packages.${system}.image-nix-scratch-buildgomodule-noupx; };
+          image-scratch-buildgomodule-upx-tarball = flake-utils.lib.mkApp { drv = self.packages.${system}.image-nix-scratch-buildgomodule-upx; };
+          image-scratch-gomod2nix-noupx-tarball = flake-utils.lib.mkApp { drv = self.packages.${system}.image-nix-scratch-gomod2nix-noupx; };
+          image-scratch-gomod2nix-upx-tarball = flake-utils.lib.mkApp { drv = self.packages.${system}.image-nix-scratch-gomod2nix-upx; };
         };
 
-        # `nix develop`
+        # --- Dev Shell ---
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             go
@@ -243,9 +261,9 @@
             gotools
             go-tools
             gomod2nix.packages.${system}.default
+            upx
           ];
         };
-
       });
 }
 # end

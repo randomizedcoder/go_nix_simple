@@ -1,0 +1,46 @@
+# Generated Containerfile - DO NOT EDIT MANUALLY
+# Variant: Base=scratch, Cache=none, UPX=true
+
+ARG GO_VERSION=1.24.2
+# ... other ARGs ...
+
+FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION} AS build
+# ... ARGs, WORKDIR, COPY . . ...
+
+# --- Go Build Step ---
+RUN CGO_ENABLED=0 go build \
+    -trimpath \
+    -tags=netgo,osusergo \
+    -ldflags="-s -w" \\\n    -o /go/bin/go_nix_simple \
+    ./cmd/go_nix_simple/go_nix_simple.go
+# --- End Go Build Step ---
+
+
+# --- UPX Stage ---
+FROM debian:bullseye-slim AS compress
+RUN --mount=type=cache,target=/var/cache/apt --mount=type=cache,target=/var/lib/apt/lists \
+    apt-get update && apt-get install -y --no-install-recommends upx-ucl
+COPY --from=build /go/bin/go_nix_simple /go_nix_simple
+RUN upx --best --lzma /go_nix_simple
+# --- End UPX Stage ---
+
+
+FROM scratch AS arrange
+
+COPY --from=compress --chmod=544 /go_nix_simple /
+
+COPY --from=build --chmod=444 /go/src/VERSION /
+
+# Add CA certs for scratch image if needed
+ADD --chmod=444 https://curl.haxx.se/ca/cacert.pem /certs.crt
+COPY --from=build --chmod=444 /certs.crt /etc/ssl/certs/ca-certificates.crt
+
+
+
+# --- Final Stage ---
+FROM scratch
+COPY --from=arrange / /
+USER 9999:9999
+EXPOSE 9108
+ENTRYPOINT ["/go_nix_simple"]
+# --- End Final Stage ---

@@ -1,0 +1,39 @@
+# Generated Containerfile - DO NOT EDIT MANUALLY
+# Variant: Base=scratch, Cache=athens, UPX=false
+
+ARG GO_VERSION=1.24.2
+# ... other ARGs ...
+
+FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION} AS build
+# ... ARGs, WORKDIR, COPY . . ...
+
+# --- Go Build Step ---
+RUN GOPROXY=http://hp4.home:8888,https://proxy.golang.org,direct \
+    CGO_ENABLED=0 go build \
+    -trimpath \
+    -tags=netgo,osusergo \
+    -ldflags="-s -w" \\\n    -o /go/bin/go_nix_simple \
+    ./cmd/go_nix_simple/go_nix_simple.go
+# --- End Go Build Step ---
+
+
+
+FROM scratch AS arrange
+
+COPY --from=build --chmod=544 /go/bin/go_nix_simple /
+
+COPY --from=build --chmod=444 /go/src/VERSION /
+
+# Add CA certs for scratch image if needed
+ADD --chmod=444 https://curl.haxx.se/ca/cacert.pem /certs.crt
+COPY --from=build --chmod=444 /certs.crt /etc/ssl/certs/ca-certificates.crt
+
+
+
+# --- Final Stage ---
+FROM scratch
+COPY --from=arrange / /
+USER 9999:9999
+EXPOSE 9108
+ENTRYPOINT ["/go_nix_simple"]
+# --- End Final Stage ---

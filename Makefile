@@ -2,21 +2,23 @@
 # /go-nix-simple/Makefile
 #
 
-VERSION := $(shell cat VERSION)
-LOCAL_MAJOR_VERSION := $(word 1,$(subst ., ,$(VERSION)))
-LOCAL_MINOR_VERSION := $(word 2,$(subst ., ,$(VERSION)))
-LOCAL_PATCH_VERSION := $(word 3,$(subst ., ,$(VERSION)))
 SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-MYPATH = $(shell pwd)
+VERSION := $(shell cat VERSION)
 COMMIT := $(shell git describe --always)
 DATE := $(shell date -u +"%Y-%m-%d-%H:%M")
+LDFLAGS_STR := "-X main.commit=${COMMIT} -X main.date=${DATE} -X main.version=${VERSION}"
 
 TIMESTAMP := date +"%Y-%m-%d %H:%M:%S.%3N"
+MYPATH = $(shell pwd)
 
-# Fake targets
-.PHONY: all nix_build_go-nix-simple nix_build_docker nix_build_docker_upx \
+GENERATOR_DIR := cmd/generate-containerfiles
+GENERATOR_BIN := $(GENERATOR_DIR)/generate-containerfiles
+
+# --- Phony Targets ---
+.PHONY: all \
+	nix_build_go-nix-simple nix_build_docker nix_build_docker_upx \
 	nix_build_docker_scratch nix_build_docker_trace nix_build_docker_load \
 	gomod2nix nix_build_docker_gomod2nix nix_build_docker_gomod2nix_load \
 	builddocker_go-nix-simple-distroless \
@@ -27,7 +29,9 @@ TIMESTAMP := date +"%Y-%m-%d %H:%M:%S.%3N"
 	builddocker_go-nix-simple-http-cache \
 	deploy_athens down_athens athens_traffic nix_build_athens run_athens ls \
 	dive dive-distroless run run-distroless curl prepare clear_go_mod_cache \
-	go_glean flake_metadata flake_show
+	go_clean flake_metadata flake_show \
+	install_bazel gazelle_init gazelle_run bazel_build bazel_run \
+	generate-containerfiles
 
 
 all: nix_build_docker nix_build_docker_load \
@@ -336,5 +340,26 @@ bazel_build:
 
 bazel_run:
 	bazel run //cmd/go_nix_simple:go_nix_simple
+
+#--------------------------
+# Containerfile Generation
+
+#--------------------------
+# Containerfile Generation
+
+# Path to the generator tool directory
+GENERATOR_DIR := cmd/generate-containerfiles
+GENERATOR_BIN := $(GENERATOR_DIR)/generate-containerfiles
+
+.PHONY: generate-containerfiles
+generate-containerfiles:
+	@echo "[$($(TIMESTAMP))] Building Containerfile generator..."
+	go build -ldflags ${LDFLAGS_STR} -o ./${GENERATOR_BIN} ./${GENERATOR_BIN}.go
+	@echo "[$($(TIMESTAMP))] Running Containerfile generator..."
+	@_start_time_ns=$$(date +%s%N); \
+	$(GENERATOR_BIN); \
+	_end_time_ns=$$(date +%s%N); \
+	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+	echo "[$($(TIMESTAMP))] Finished generating Containerfiles. Duration: $$_duration_ms ms."
 
 # end

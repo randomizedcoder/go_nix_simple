@@ -1,0 +1,36 @@
+# Generated Containerfile - DO NOT EDIT MANUALLY
+# Variant: Base=gcr.io/distroless/static-debian12, Cache=default, UPX=false
+
+ARG GO_VERSION=1.24.2
+# ... other ARGs ...
+
+FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION} AS build
+# ... ARGs, WORKDIR, COPY . . ...
+
+# --- Go Build Step ---
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build \
+    -trimpath \
+    -tags=netgo,osusergo \
+    -ldflags="-s -w" \\\n    -o /go/bin/go_nix_simple \
+    ./cmd/go_nix_simple/go_nix_simple.go
+# --- End Go Build Step ---
+
+
+
+FROM scratch AS arrange
+
+COPY --from=build --chmod=544 /go/bin/go_nix_simple /
+
+COPY --from=build --chmod=444 /go/src/VERSION /
+
+
+
+# --- Final Stage ---
+FROM gcr.io/distroless/static-debian12
+COPY --from=arrange / /
+USER 9999:9999
+EXPOSE 9108
+ENTRYPOINT ["/go_nix_simple"]
+# --- End Final Stage ---
