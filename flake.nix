@@ -48,6 +48,9 @@
           ldflags = commonLdflags;
           buildFlags = commonBuildFlags;
           env = { CGO_ENABLED = 0; };
+          # postInstall = ''
+          #   mv $out/bin/go-nix-simple-buildgomodule $out/bin/go_nix_simple
+          # '';
         };
 
         # Binary built using gomod2nix buildGoApplication
@@ -235,10 +238,14 @@
         apps = {
           # Default app for `nix run`
           default = flake-utils.lib.mkApp {
-            drv = self.packages.${system}.binary-nix-buildgomodule; # Updated default app
+            drv = self.packages.${system}.binary-nix-buildgomodule;
+            # Explicitly tell mkApp where the executable is
+            exePath = "/bin/go_nix_simple";
           };
           gomod2nix = flake-utils.lib.mkApp {
             drv = self.packages.${system}.binary-nix-gomod2nix;
+            # Also specify exePath here for consistency, since postInstall renames it
+            exePath = "/bin/go_nix_simple";
           };
 
           # Apps to output image tarballs (useful for loading into Docker)
