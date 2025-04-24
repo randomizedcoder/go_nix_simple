@@ -61,7 +61,8 @@
           src = ./.;
           ldflags = commonLdflags;
           buildFlags = commonBuildFlags;
-          env = { CGO_ENABLED = 0; };
+          #env = { CGO_ENABLED = 0; };
+          CGO_ENABLED = 0;
           # Ensure output binary is named consistently for image Cmd
           postInstall = ''
             mv $out/bin/go-nix-simple-gomod2nix $out/bin/go_nix_simple
