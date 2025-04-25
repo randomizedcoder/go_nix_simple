@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "generate-containerfiles_lib",
+    srcs = ["generate-containerfiles.go"],
+    importpath = "github.com/randomizedcoder/go_nix_simple/cmd/generate-containerfiles",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "generate-containerfiles",
+    embed = [":generate-containerfiles_lib"],
+    visibility = ["//visibility:public"],
+)

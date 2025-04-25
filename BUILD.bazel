@@ -1,4 +1,9 @@
 # go_nix_simple/BUILD.bazel
+
+# gazelle:prefix github.com/randomizedcoder/go_nix_simple
+# gazelle:map_kind go_repository go_repository //:deps.bzl
+# gazelle:repository_macro deps.bzl%go_dependencies
+
 load("@bazel_gazelle//:def.bzl", "gazelle")
 
 # Gazelle configuration

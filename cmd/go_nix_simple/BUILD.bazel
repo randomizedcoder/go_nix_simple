@@ -1,5 +1,14 @@
+# cmd/go_nix_simple/BUILD.bazel
+
+# Load necessary rules
 load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
 
+#load("@rules_oci//oci:defs.bzl", "oci_image", "oci_tarball")
+load("@rules_oci//oci:defs.bzl", "oci_image")
+
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
+
+# Define the Go library for the application code
 go_library(
     name = "go_nix_simple_lib",
     srcs = ["go_nix_simple.go"],
@@ -17,8 +26,179 @@ go_library(
     ],
 )
 
+# Define the standard Go binary target
 go_binary(
-    name = "go_nix_simple",
+    name = "go_nix_simple_binary_noupx",
     embed = [":go_nix_simple_lib"],
+    # Apply ldflags for static, stripped binary
+    gc_linkopts = [
+        "-linkmode=external",
+        "-extldflags=-static",
+    ],
+    # Note: -s -w are often applied automatically by Bazel in opt mode,
+    # but explicitly adding them via pure-go might be needed if not static.
+    # For fully static builds, CGO_ENABLED=0 is usually implicit.
+    # ldflags = ["-s", "-w"], # Optional, Bazel often handles stripping
+    pure = "on",  # Equivalent to CGO_ENABLED=0
+    static = "on",
     visibility = ["//visibility:public"],
 )
+
+# Define a genrule to run UPX on the binary
+genrule(
+    name = "go_nix_simple_binary_upx_packed",
+    srcs = [":go_nix_simple_binary_noupx"],
+    outs = ["go_nix_simple_upx"],
+    # Command to run UPX
+    cmd = "$(execpath @upx_linux_amd64//:upx_bin) --best --lzma -o $@ $(location :go_nix_simple_binary_noupx)",
+    executable = True,
+    # Reference the UPX toolchain/filegroup defined in WORKSPACE
+    toolchains = ["@upx_linux_amd64//:upx_bin"],
+    visibility = ["//visibility:public"],
+)
+
+# --- OCI Image Definitions ---
+
+# Common attributes
+_ENTRYPOINT = ["/go_nix_simple"]
+_USER = "65534"  # nobody user, matching Nix setup
+_EXPOSED_PORTS = ["9108/tcp"]
+
+# Image: Distroless, No UPX
+oci_image(
+    name = "image_bazel_distroless_noupx",
+    base = "@distroless_base//image",  # Reference the pulled base image
+    config = {
+        "Entrypoint": _ENTRYPOINT,
+        "ExposedPorts": _EXPOSED_PORTS,
+        "User": _USER,
+    },
+    tars = [
+        pkg_tar(
+            name = "image_bazel_distroless_noupx_files_tar",
+            srcs = [
+                ":go_nix_simple_binary_noupx",
+                "//:VERSION",
+            ],
+            mode = "0755",
+            package_dir = "/",
+            renames = {
+                "cmd/go_nix_simple/go_nix_simple_binary_noupx": "go_nix_simple",
+            },
+        ),
+    ],
+)
+
+# Image: Scratch, No UPX
+oci_image(
+    name = "image_bazel_scratch_noupx",
+    base = "@scratch",  # Use built-in scratch
+    config = {
+        "Entrypoint": _ENTRYPOINT,
+        "ExposedPorts": _EXPOSED_PORTS,
+        "User": _USER,
+    },
+    tars = [
+        pkg_tar(
+            name = "image_bazel_scratch_noupx_files_tar",
+            srcs = [
+                ":go_nix_simple_binary_noupx",
+                "//:VERSION",
+                "@distroless_base//image_layer:certs",  # Copy certs from distroless base
+            ],
+            mode = "0755",
+            # Ensure certs have correct permissions
+            modes = {
+                "etc/ssl/certs/ca-certificates.crt": "0644",
+            },
+            package_dir = "/",
+            renames = {
+                "cmd/go_nix_simple/go_nix_simple_binary_noupx": "go_nix_simple",
+                # Adjust path if needed based on how certs are extracted
+                "certs/etc/ssl/certs/ca-certificates.crt": "etc/ssl/certs/ca-certificates.crt",
+            },
+        ),
+    ],
+)
+
+# Image: Distroless, UPX
+oci_image(
+    name = "image_bazel_distroless_upx",
+    base = "@distroless_base//image",
+    config = {
+        "Entrypoint": _ENTRYPOINT,
+        "ExposedPorts": _EXPOSED_PORTS,
+        "User": _USER,
+    },
+    tars = [
+        pkg_tar(
+            name = "image_bazel_distroless_upx_files_tar",
+            srcs = [
+                ":go_nix_simple_binary_upx_packed",  # The UPX'd binary
+                "//:VERSION",
+            ],
+            mode = "0755",
+            package_dir = "/",
+            # Rename UPX'd binary to the expected entrypoint name
+            renames = {
+                "cmd/go_nix_simple/go_nix_simple_upx": "go_nix_simple",
+            },
+        ),
+    ],
+)
+
+# Image: Scratch, UPX
+oci_image(
+    name = "image_bazel_scratch_upx",
+    base = "@scratch",
+    config = {
+        "Entrypoint": _ENTRYPOINT,
+        "ExposedPorts": _EXPOSED_PORTS,
+        "User": _USER,
+    },
+    tars = [
+        pkg_tar(
+            name = "image_bazel_scratch_upx_files_tar",
+            srcs = [
+                ":go_nix_simple_binary_upx_packed",
+                "//:VERSION",
+                "@distroless_base//image_layer:certs",
+            ],
+            mode = "0755",
+            modes = {
+                "etc/ssl/certs/ca-certificates.crt": "0644",
+            },
+            package_dir = "/",
+            renames = {
+                "cmd/go_nix_simple/go_nix_simple_upx": "go_nix_simple",
+                "certs/etc/ssl/certs/ca-certificates.crt": "etc/ssl/certs/ca-certificates.crt",
+            },
+        ),
+    ],
+)
+
+# # --- Tarball Targets (for loading into Docker) ---
+# # Create tarball targets for each image variant
+# oci_tarball(
+#     name = "image_bazel_distroless_noupx_tarball",
+#     image = ":image_bazel_distroless_noupx",
+#     repo_tags = ["$(REPO_PREFIX)/bazel-go-nix-simple-distroless-noupx:$(VERSION)"],  # Match expected tag format
+# )
+
+# oci_tarball(
+#     name = "image_bazel_scratch_noupx_tarball",
+#     image = ":image_bazel_scratch_noupx",
+#     repo_tags = ["$(REPO_PREFIX)/bazel-go-nix-simple-scratch-noupx:$(VERSION)"],
+# )
+
+# oci_tarball(
+#     name = "image_bazel_distroless_upx_tarball",
+#     image = ":image_bazel_distroless_upx",
+#     repo_tags = ["$(REPO_PREFIX)/bazel-go-nix-simple-distroless-upx:$(VERSION)"],
+# )
+
+# oci_tarball(
+#     name = "image_bazel_scratch_upx_tarball",
+#     image = ":image_bazel_scratch_upx",
+#     repo_tags = ["$(REPO_PREFIX)/bazel-go-nix-simple-scratch-upx:$(VERSION)"],
+# )

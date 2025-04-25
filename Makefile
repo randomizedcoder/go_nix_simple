@@ -221,7 +221,7 @@ flake_show:
 install_bazel:
 	go install github.com/bazelbuild/bazel-gazelle/cmd/gazelle@latest
 
-gazelle_init:
+gazelle_update:
 	bazel run //:gazelle -- update-repos -from_file=go.mod
 
 gazelle_run:
@@ -232,5 +232,8 @@ bazel_build:
 
 bazel_run:
 	bazel run //cmd/go_nix_simple:go_nix_simple
+
+bazel_build_a_tarball:
+	bazel build //cmd/go_nix_simple:image_bazel_distroless_noupx_tarball
 
 # end
