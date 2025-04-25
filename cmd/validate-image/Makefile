@@ -1,5 +1,5 @@
 #
-# /cmd/go_nix_simple/Makefile
+# /cmd/validate-image/Makefile
 #
 
 # ldflags variables to update --version
@@ -10,7 +10,7 @@ VERSION_FILE := $(shell cat ../../VERSION)
 LOCAL_MAJOR_VERSION := $(word 1,$(subst ., ,$(VERSION_FILE)))
 LOCAL_MINOR_VERSION := $(word 2,$(subst ., ,$(VERSION_FILE)))
 LOCAL_PATCH_VERSION := $(word 3,$(subst ., ,$(VERSION_FILE)))
-BINARY := go_nix_simple
+BINARY := validate-image
 
 all: clean build
 

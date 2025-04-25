@@ -38,8 +38,10 @@ func main() {
 	// --- Flags ---
 	tmplPath := flag.String("template", "build/containers/go_nix_simple_refactor/Containerfile.tmpl", "Path to the Containerfile template")
 	outputPath := flag.String("output", "build/containers/go_nix_simple_refactor", "Directory to save generated Containerfiles")
+
 	athensURL := flag.String("athens-url", "http://hp4.home:8888", "Athens proxy URL")
 	httpProxyURL := flag.String("http-proxy-url", "http://hp4.home:3128", "HTTP proxy URL")
+
 	goVersion := flag.String("go-version", "1.24.2", "Go version for builder image")
 	// Add flags for MYPATH, COMMIT, DATE, VERSION if they need to be passed to the template
 	// Example:
@@ -57,8 +59,8 @@ func main() {
 
 	// --- Define Options for Combinations ---
 	baseImages := []string{"gcr.io/distroless/static-debian12", "scratch"}
-	cachingModes := []string{"default", "athens", "http", "none"}
-	useUPXOptions := []bool{false, true} // Options for UPX usage
+	cachingModes := []string{"docker", "athens", "http", "none"}
+	useUPXOptions := []bool{false, true}
 
 	var configs []Config
 	for _, base := range baseImages {
@@ -66,19 +68,19 @@ func main() {
 			for _, upx := range useUPXOptions {
 
 				// --- Skip invalid or undesired combinations ---
-				// Example: UPX might not make sense with certain cache modes,
-				// or you might only want UPX for distroless. Adjust as needed.
-				if upx && base == "scratch" {
-					// Example: Let's say we only want UPX for distroless for now
-					// log.Printf("Skipping combination: Base=%s, Cache=%s, UPX=%t", base, cache, upx)
-					// continue
-				}
-				if cache != "default" && upx {
-					// Example: Let's say UPX only applies to the 'default' cache build for simplicity
-					// log.Printf("Skipping combination: Base=%s, Cache=%s, UPX=%t", base, cache, upx)
-					// continue
-				}
-				// Add any other skipping logic here if necessary
+				// // Example: UPX might not make sense with certain cache modes,
+				// // or you might only want UPX for distroless. Adjust as needed.
+				// if upx && base == "scratch" {
+				// 	// Example: Let's say we only want UPX for distroless for now
+				// 	// log.Printf("Skipping combination: Base=%s, Cache=%s, UPX=%t", base, cache, upx)
+				// 	// continue
+				// }
+				// if cache != "default" && upx {
+				// 	// Example: Let's say UPX only applies to the 'default' cache build for simplicity
+				// 	// log.Printf("Skipping combination: Base=%s, Cache=%s, UPX=%t", base, cache, upx)
+				// 	// continue
+				// }
+				// // Add any other skipping logic here if necessary
 
 				// --- Create Config for this combination ---
 				cfg := Config{
@@ -104,7 +106,7 @@ func main() {
 		var buildCmdBuilder strings.Builder
 		buildCmdBuilder.WriteString("RUN ") // Start the RUN command
 		switch cfg.CachingMode {
-		case "default":
+		case "docker":
 			buildCmdBuilder.WriteString("--mount=type=cache,target=/go/pkg/mod \\\n    --mount=type=cache,target=/root/.cache/go-build \\\n    ")
 		case "athens":
 			buildCmdBuilder.WriteString(fmt.Sprintf("GOPROXY=%s,https://proxy.golang.org,direct \\\n    ", cfg.AthensProxyURL))

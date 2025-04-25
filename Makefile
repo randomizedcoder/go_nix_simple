@@ -59,10 +59,12 @@ DOCKER_IMAGE_TARGETS := $(foreach base,$(DOCKER_BASES), \
                             $(foreach packer,$(DOCKER_PACKERS), \
                               $(DOCKER_TARGET_PREFIX)-$(base)-$(cache)-$(packer))))
 
-INVALID_DOCKER_COMBOS := $(filter %-athens-upx, $(DOCKER_IMAGE_TARGETS)) \
-                         $(filter %-http-upx, $(DOCKER_IMAGE_TARGETS)) \
-                         $(filter %-none-upx, $(DOCKER_IMAGE_TARGETS)) \
-                         $(filter %-scratch-athens-upx, $(DOCKER_IMAGE_TARGETS))
+# No filters yet
+INVALID_DOCKER_COMBOS :=
+# INVALID_DOCKER_COMBOS := $(filter %-athens-upx, $(DOCKER_IMAGE_TARGETS)) \
+#                          $(filter %-http-upx, $(DOCKER_IMAGE_TARGETS)) \
+#                          $(filter %-none-upx, $(DOCKER_IMAGE_TARGETS)) \
+#                          $(filter %-scratch-athens-upx, $(DOCKER_IMAGE_TARGETS))
 
 VALID_DOCKER_IMAGE_TARGETS := $(filter-out $(INVALID_DOCKER_COMBOS), $(DOCKER_IMAGE_TARGETS))
 
@@ -91,7 +93,7 @@ prepare-output-dir:
 
 #--------------------------
 # Containerfile Generation
-generate-containerfiles: prepare-output-dir
+generate-containerfiles:
 	@echo "[$($(TIMESTAMP))] Building Containerfile generator..."
 	@$(MAKE) -C $(GENERATOR_DIR) build
 	@echo "[$($(TIMESTAMP))] Running Containerfile generator..."

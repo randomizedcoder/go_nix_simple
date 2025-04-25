@@ -1,5 +1,5 @@
 # Generated Containerfile - DO NOT EDIT MANUALLY
-# Variant: Base=gcr.io/distroless/static-debian12, Cache=default, UPX=false
+# Variant: Base=scratch, Cache=docker, UPX=true
 
 # --- Global ARGs ---
 # These are available throughout the build
@@ -53,6 +53,12 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 # --- UPX Stage (Conditional) ---
 
+FROM debian:bullseye-slim AS compress
+RUN --mount=type=cache,target=/var/cache/apt --mount=type=cache,target=/var/lib/apt/lists \
+    apt-get update && apt-get install -y --no-install-recommends upx-ucl
+COPY --from=build /go/bin/go_nix_simple /go_nix_simple
+RUN upx --best --lzma /go_nix_simple
+
 # --- End UPX Stage ---
 
 # --- Arrange Stage ---
@@ -61,7 +67,7 @@ FROM scratch AS arrange
 
 # Copy the executable (either original or UPX'd)
 
-COPY --from=build --chmod=544 /go/bin/go_nix_simple /
+COPY --from=compress --chmod=544 /go_nix_simple /
 
 
 # Copy the VERSION file
@@ -69,11 +75,13 @@ COPY --from=build --chmod=444 /go/src/VERSION /
 
 # Copy CA certs only if the final base image is scratch
 
+COPY --from=build --chmod=444 /ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
 # --- End Arrange Stage ---
 
 
 # --- Final Stage ---
-FROM gcr.io/distroless/static-debian12
+FROM scratch
 COPY --from=arrange / /
 USER 9999:9999
 EXPOSE 9108
