@@ -236,4 +236,7 @@ bazel_run:
 bazel_build_a_tarball:
 	bazel build //cmd/go_nix_simple:image_bazel_distroless_noupx_tarball
 
+bazel_go:
+	bazel build //cmd/go_nix_simple:image_bazel_distroless_noupx
+
 # end

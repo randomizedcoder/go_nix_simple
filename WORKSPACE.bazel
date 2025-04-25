@@ -12,13 +12,13 @@ http_archive(
     ],
 )
 
-# Bazel Gazelle (Updated to v0.36.0)
+# Bazel Gazelle
 http_archive(
     name = "bazel_gazelle",
-    sha256 = "75df288c4b31c81eb50f51e2e14f4763cb7548daae126817247064637fd9ea62",
+    sha256 = "d76bf7a60fd8b050444090dfa2837a4eaf9829e1165618ee35dceca5cbdf58d5",
     urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/bazel-gazelle/releases/download/v0.36.0/bazel-gazelle-v0.36.0.tar.gz",
-        "https://github.com/bazelbuild/bazel-gazelle/releases/download/v0.36.0/bazel-gazelle-v0.36.0.tar.gz",
+        "https://mirror.bazel.build/github.com/bazelbuild/bazel-gazelle/releases/download/v0.43.0/bazel-gazelle-v0.43.0.tar.gz",
+        "https://github.com/bazelbuild/bazel-gazelle/releases/download/v0.43.0/bazel-gazelle-v0.43.0.tar.gz",
     ],
 )
 
@@ -265,6 +265,10 @@ go_repository(
 go_repository(
     name = "com_github_prometheus_client_model",
     importpath = "github.com/prometheus/client_model",
+    #sum = "h1:q5b0k9sP0D/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTY=",
+    #version = "v0.6.2",
+    # sum = "h1:ZKSh/rekM+n3CeS952MLRAdFwIKqeY8b62p8ais2e9E=",
+    # version = "v0.6.1",
     sum = "h1:ZKSh/rekM+n3CeS952MLRAdFwIKqeY8b62p8ais2e9E=",
     version = "v0.6.1",
 )
@@ -1057,7 +1061,7 @@ go_repository(
     name = "org_golang_x_crypto",
     importpath = "golang.org/x/crypto",
     sum = "h1:kJNSjF/Xp7kU0iB2Z+9viTPMW4EqqsrywMXLJOOsXSE=",
-    version = "v0.37.0",
+    version = "v0.43.0",
 )
 
 go_repository(
