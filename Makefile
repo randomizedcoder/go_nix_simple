@@ -25,6 +25,10 @@ GENERATOR_DIR := cmd/generate-containerfiles
 GENERATOR_BIN := $(GENERATOR_DIR)/generate-containerfiles
 CONTAINERFILE_DIR := build/containers/go_nix_simple_refactor
 
+# --- Validator Tool ---
+VALIDATOR_DIR := cmd/validate-image
+VALIDATOR_BIN := $(VALIDATOR_DIR)/validate-image
+
 # --- Build Command Macro (Used for Nix builds now) ---
 define time_command
 @_start_time_ns=$$(date +%s%N); \
@@ -45,7 +49,7 @@ NIX_PACKERS := noupx upx
 # --- Docker Build Variants (Base names for easier reference) ---
 DOCKER_IMAGE_PREFIX := docker-go-nix-simple
 DOCKER_BASES := distroless scratch
-DOCKER_CACHES := default athens http none
+DOCKER_CACHES := docker athens http none
 DOCKER_PACKERS := noupx upx
 
 # --- Generate Lists of Targets ---
@@ -66,25 +70,37 @@ INVALID_DOCKER_COMBOS :=
 #                          $(filter %-none-upx, $(DOCKER_IMAGE_TARGETS)) \
 #                          $(filter %-scratch-athens-upx, $(DOCKER_IMAGE_TARGETS))
 
-VALID_DOCKER_IMAGE_TARGETS := $(filter-out $(INVALID_DOCKER_COMBOS), $(DOCKER_IMAGE_TARGETS))
+#VALID_DOCKER_IMAGE_TARGETS := $(filter-out $(INVALID_DOCKER_COMBOS), $(DOCKER_IMAGE_TARGETS))
 
+# --- Generate Lists of Validation Targets ---
+VALIDATE_NIX_TARGETS := $(NIX_IMAGE_TARGETS:build-%=validate-%)
+VALIDATE_DOCKER_TARGETS := $(VALID_DOCKER_IMAGE_TARGETS:build-%=validate-%)
+ALL_VALIDATE_TARGETS := $(VALIDATE_NIX_TARGETS) $(VALIDATE_DOCKER_TARGETS)
 
 
 # --- Phony Targets ---
 .PHONY: all all-nix all-docker \
 	prepare-output-dir generate-containerfiles \
+	build-validator \
+	validate-all validate-all-nix validate-all-docker \
 	load-nix-result \
 	summary \
 	$(NIX_IMAGE_TARGETS) \
 	$(VALID_DOCKER_IMAGE_TARGETS) \
+	$(ALL_VALIDATE_TARGETS) \
 	deploy_athens down_athens run_athens ls dive run curl prepare clear_go_mod_cache go_clean \
 	flake_metadata flake_show \
-	install_bazel gazelle_init gazelle_run bazel_build bazel_run
+	install_bazel gazelle_init gazelle_run bazel_build bazel_run \
+	bazel_build_a_tarball bazel_go
 
 # --- Aggregate Targets ---
 all: prepare-output-dir all-nix all-docker summary
 all-nix: prepare-output-dir $(NIX_IMAGE_TARGETS)
 all-docker: prepare-output-dir $(VALID_DOCKER_IMAGE_TARGETS)
+
+validate-all: $(ALL_VALIDATE_TARGETS)
+validate-all-nix: $(VALIDATE_NIX_TARGETS)
+validate-all-docker: $(VALIDATE_DOCKER_TARGETS)
 
 # --- Prepare Output Directory ---
 prepare-output-dir:
@@ -98,6 +114,13 @@ generate-containerfiles:
 	@$(MAKE) -C $(GENERATOR_DIR) build
 	@echo "[$($(TIMESTAMP))] Running Containerfile generator..."
 	$(call time_command, $@, $(GENERATOR_BIN) --output $(CONTAINERFILE_DIR))
+
+#--------------------------
+# Validator Build Target   # <-- NEW SECTION
+build-validator:
+	@echo "[$($(TIMESTAMP))] Building validator tool..."
+	@$(MAKE) -C $(VALIDATOR_DIR) build
+	@echo "[$($(TIMESTAMP))] Finished building validator tool."
 
 #--------------------------
 # Nix Build Targets
@@ -129,6 +152,23 @@ $(VALID_DOCKER_IMAGE_TARGETS): $(DOCKER_TARGET_PREFIX)-% : prepare-output-dir ge
 		"$(strip $(CONTAINERFILE_DIR))" \
 		"$(strip $(MYPATH))" \
 		"$(strip $(BUILD_OUTPUT_DIR))"
+
+#--------------------------
+# Validation Targets
+
+# Generic rule for validating Nix images
+$(VALIDATE_NIX_TARGETS): validate-$(NIX_IMAGE_PREFIX)-% : build-$(NIX_IMAGE_PREFIX)-% build-validator
+	@echo "[$($(TIMESTAMP))] Validating Nix image $(subst validate-,, $@)..."
+	$(eval IMAGE_TAG_TO_VALIDATE := $(strip $(REPO_PREFIX)/$(subst image-nix-,nix-go-nix-simple-,$(NIX_IMAGE_PREFIX)-$(*)):$(VERSION)))
+	$(VALIDATOR_BIN) -images="$(IMAGE_TAG_TO_VALIDATE)" -timeout=30s
+
+# Generic rule for validating Docker images
+validate-$(DOCKER_TARGET_PREFIX)-% : $(DOCKER_TARGET_PREFIX)-% build-validator
+	@echo "[$($(TIMESTAMP))] Validating Docker image $(subst validate-,, $@)..."
+	# *** Adjust tag calculation to use $@ and patsubst ***
+	$(eval STEM := $(patsubst validate-$(DOCKER_TARGET_PREFIX)-%,%,$@))
+	$(eval IMAGE_TAG_TO_VALIDATE := $(strip $(REPO_PREFIX)/$(subst $(DOCKER_TARGET_PREFIX)-,$(DOCKER_IMAGE_PREFIX)-,$(DOCKER_TARGET_PREFIX)-$(STEM)):$(VERSION)))
+	$(VALIDATOR_BIN) -images="$(IMAGE_TAG_TO_VALIDATE)" -timeout=30s
 
 #--------------------------
 # Summary Target
