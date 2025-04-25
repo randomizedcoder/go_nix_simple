@@ -48,12 +48,12 @@ CONTEXT_PATH=$(echo "${CONTEXT_PATH_RAW}" | xargs)
 OUTPUT_DIR=$(echo "${OUTPUT_DIR_RAW}" | xargs)
 
 # --- Variables ---
-TARGET_NAME="build-docker-image-${BASE}-${CACHE}-${PACKER}"
+TARGET_NAME="build-image-docker-${BASE}-${CACHE}-${PACKER}"
 CONTAINERFILE="${CONTAINERFILE_DIR}/Containerfile.${BASE}.${CACHE}.${PACKER}"
 IMAGE_TAG="${REPO_PREFIX}/${DOCKER_IMAGE_PREFIX}-${BASE}-${CACHE}-${PACKER}:${VERSION}"
 LATEST_TAG="${REPO_PREFIX}/${DOCKER_IMAGE_PREFIX}-${BASE}-${CACHE}-${PACKER}:latest"
-TIMESTAMP_CMD='date +"%Y-%m-%d %H:%M:%S.%3N"' # Command to get timestamp
-METRIC_FILE="${OUTPUT_DIR}/${TARGET_NAME}.csv" # Output file path
+TIMESTAMP_CMD='date +"%Y-%m-%d %H:%M:%S.%3N"'
+METRIC_FILE="${OUTPUT_DIR}/${TARGET_NAME}.csv"
 
 # --- Validation ---
 if [[ ! -f "${CONTAINERFILE}" ]]; then

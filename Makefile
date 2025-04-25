@@ -1,5 +1,5 @@
 #
-# /go-nix-simple/Makefile.mk (Refactored)
+# /go-nix-simple/Makefile
 #
 
 SHELL := /usr/bin/env bash
@@ -13,11 +13,10 @@ LDFLAGS_STR := "-X main.commit=${COMMIT} -X main.date=${DATE} -X main.version=${
 
 # --- Helper Variables ---
 TIMESTAMP := date +"%Y-%m-%d %H:%M:%S.%3N"
-MYPATH = $(shell pwd) # Context for Docker builds
-REPO_PREFIX := randomizedcoder # Docker repo prefix
+MYPATH = $(shell pwd)
+REPO_PREFIX := randomizedcoder
 
 # --- Output Directory for Metrics ---
-# Create a unique directory for this build run's metrics
 BUILD_RUN_TIMESTAMP := $(shell date +"%Y%m%d_%H%M%S")
 BUILD_OUTPUT_DIR := ./output/$(BUILD_RUN_TIMESTAMP)
 
@@ -44,30 +43,29 @@ NIX_BASES := distroless scratch
 NIX_PACKERS := noupx upx
 
 # --- Docker Build Variants (Base names for easier reference) ---
-DOCKER_IMAGE_PREFIX := docker-go-nix-simple # Used in image tags
+DOCKER_IMAGE_PREFIX := docker-go-nix-simple
 DOCKER_BASES := distroless scratch
 DOCKER_CACHES := default athens http none
 DOCKER_PACKERS := noupx upx
 
 # --- Generate Lists of Targets ---
-# Nix Image Build Targets (e.g., build-nix-image-distroless-buildgomodule-noupx)
 NIX_IMAGE_TARGETS := $(foreach base,$(NIX_BASES), \
                        $(foreach builder,$(NIX_BUILDERS), \
                          $(foreach packer,$(NIX_PACKERS), \
                            build-$(NIX_IMAGE_PREFIX)-$(base)-$(builder)-$(packer))))
 
-# Docker Image Build Targets (e.g., build-docker-image-distroless-default-noupx)
 DOCKER_IMAGE_TARGETS := $(foreach base,$(DOCKER_BASES), \
                           $(foreach cache,$(DOCKER_CACHES), \
                             $(foreach packer,$(DOCKER_PACKERS), \
-                              build-docker-image-$(base)-$(cache)-$(packer))))
+                              $(DOCKER_TARGET_PREFIX)-$(base)-$(cache)-$(packer))))
 
-# Filter out invalid Docker combinations (e.g., non-default cache with upx) - Adjust as needed
 INVALID_DOCKER_COMBOS := $(filter %-athens-upx, $(DOCKER_IMAGE_TARGETS)) \
                          $(filter %-http-upx, $(DOCKER_IMAGE_TARGETS)) \
                          $(filter %-none-upx, $(DOCKER_IMAGE_TARGETS)) \
-                         $(filter %-scratch-athens-upx, $(DOCKER_IMAGE_TARGETS)) # Example: Maybe UPX+Scratch+Athens is invalid
+                         $(filter %-scratch-athens-upx, $(DOCKER_IMAGE_TARGETS))
+
 VALID_DOCKER_IMAGE_TARGETS := $(filter-out $(INVALID_DOCKER_COMBOS), $(DOCKER_IMAGE_TARGETS))
+
 
 
 # --- Phony Targets ---
@@ -82,9 +80,8 @@ VALID_DOCKER_IMAGE_TARGETS := $(filter-out $(INVALID_DOCKER_COMBOS), $(DOCKER_IM
 	install_bazel gazelle_init gazelle_run bazel_build bazel_run
 
 # --- Aggregate Targets ---
-# Ensure output dir is prepared before running builds
 all: prepare-output-dir all-nix all-docker summary
-all-nix: prepare-output-dir $(NIX_IMAGE_TARGETS) # Add load targets if desired, e.g. $(NIX_IMAGE_TARGETS:%=load-%)
+all-nix: prepare-output-dir $(NIX_IMAGE_TARGETS)
 all-docker: prepare-output-dir $(VALID_DOCKER_IMAGE_TARGETS)
 
 # --- Prepare Output Directory ---
@@ -94,7 +91,6 @@ prepare-output-dir:
 
 #--------------------------
 # Containerfile Generation
-# Depends on output dir being ready (though not strictly necessary for this target)
 generate-containerfiles: prepare-output-dir
 	@echo "[$($(TIMESTAMP))] Building Containerfile generator..."
 	@$(MAKE) -C $(GENERATOR_DIR) build
@@ -104,32 +100,25 @@ generate-containerfiles: prepare-output-dir
 #--------------------------
 # Nix Build Targets
 
-# Generic rule for building Nix images
-# Depends on output dir being ready
-# TODO: Modify this rule to capture metrics and write to BUILD_OUTPUT_DIR
 $(NIX_IMAGE_TARGETS): build-$(NIX_IMAGE_PREFIX)-% : prepare-output-dir
-	$(eval FLAKE_OUTPUT_KEY := $(NIX_IMAGE_PREFIX)-$(*))
-	$(call time_command, $@, nix build .#$(FLAKE_OUTPUT_KEY))
-	# Add steps here later: record time, load image, inspect, write metric file
+	./scripts/build_nix_image.sh \
+		"$(strip $@)" \
+		"$(strip $(NIX_IMAGE_PREFIX)-$(*))" \
+		"$(strip $(REPO_PREFIX)/$(subst image-nix-,nix-go-nix-simple-,$(NIX_IMAGE_PREFIX)-$(*)):$(VERSION))" \
+		"$(strip $(BUILD_OUTPUT_DIR))"
 
-# Generic rule for loading Nix results (depends on build)
-# Usage: make load-nix-image-distroless-buildgomodule-noupx
-load-nix-%: build-nix-% load-nix-result
 
-# Helper target to load the last built result
 load-nix-result: result
 	$(call time_command, $@, docker load < result)
 
 #--------------------------
 # Docker Build Targets
 
-# Generic rule for building Docker images (calls script)
-# Depends on output dir being ready
-$(VALID_DOCKER_IMAGE_TARGETS): build-docker-image-% : prepare-output-dir generate-containerfiles
+$(VALID_DOCKER_IMAGE_TARGETS): $(DOCKER_TARGET_PREFIX)-% : prepare-output-dir generate-containerfiles
 	./scripts/build_docker_image.sh \
-		"$(strip $(word 1,$(subst -, ,$(patsubst build-docker-image-%,%,$@))))" \
-		"$(strip $(word 2,$(subst -, ,$(patsubst build-docker-image-%,%,$@))))" \
-		"$(strip $(word 3,$(subst -, ,$(patsubst build-docker-image-%,%,$@))))" \
+		"$(strip $(word 1,$(subst -, ,$(patsubst $(DOCKER_TARGET_PREFIX)-%,%,$@))))" \
+		"$(strip $(word 2,$(subst -, ,$(patsubst $(DOCKER_TARGET_PREFIX)-%,%,$@))))" \
+		"$(strip $(word 3,$(subst -, ,$(patsubst $(DOCKER_TARGET_PREFIX)-%,%,$@))))" \
 		"$(strip $(VERSION))" \
 		"$(strip $(COMMIT))" \
 		"$(strip $(DATE))" \
@@ -142,8 +131,6 @@ $(VALID_DOCKER_IMAGE_TARGETS): build-docker-image-% : prepare-output-dir generat
 #--------------------------
 # Summary Target
 
-# Define all expected final image tags
-# TODO: Update this list if Nix image tags change after loading
 ALL_NIX_IMAGE_TAGS := $(foreach target,$(NIX_IMAGE_TARGETS),$(REPO_PREFIX)/$(subst build-,,$(target)):$(VERSION))
 ALL_DOCKER_IMAGE_TAGS := $(foreach target,$(VALID_DOCKER_IMAGE_TARGETS),$(REPO_PREFIX)/$(subst build-docker-image-,$(DOCKER_IMAGE_PREFIX)-,$(target)):$(VERSION))
 ALL_IMAGE_TAGS := $(ALL_NIX_IMAGE_TAGS) $(ALL_DOCKER_IMAGE_TAGS)
