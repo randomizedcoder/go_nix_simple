@@ -44,7 +44,8 @@
           subPackages = [ "cmd/go_nix_simple" ];
           # Ensure this hash is updated when go.mod/go.sum changes
           # Run: nix build .#binary-nix-buildgomodule --rebuild
-          vendorHash = "sha256-J3kwzCP8O5UjA+bJBb5KHE1X8UKn70LbTmnAkw14Xlg=";
+          #vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+          vendorHash = "sha256-iMUa+OE/Ecb3TDw4PmvRfujo++T/r4g/pW0ZT63zIC4=";
           ldflags = commonLdflags;
           buildFlags = commonBuildFlags;
           env = { CGO_ENABLED = 0; };
@@ -268,8 +269,19 @@
             gotools
             go-tools
             gomod2nix.packages.${system}.default
+            #gomod2nix
             upx
+            bazel_7
+            curl
+            jq
           ];
+          shellHook = ''
+            export PS1='(nix-dev) \w\$ '
+            echo "Entered Nix development shell for go-nix-simple."
+          '';
+
+          # You might have other shell attributes here
+          # Example: GOPATH = "${pkgs.buildGoModule}/share/go";
         };
       });
 }

@@ -20,6 +20,8 @@ REPO_PREFIX := randomizedcoder
 BUILD_RUN_TIMESTAMP := $(shell date +"%Y%m%d_%H%M%S")
 BUILD_OUTPUT_DIR := ./output/$(BUILD_RUN_TIMESTAMP)
 
+VALIDATION_OUTPUT_DIR := $(BUILD_OUTPUT_DIR)/validation
+
 # --- Generator Tool ---
 GENERATOR_DIR := cmd/generate-containerfiles
 GENERATOR_BIN := $(GENERATOR_DIR)/generate-containerfiles
@@ -47,6 +49,7 @@ NIX_BASES := distroless scratch
 NIX_PACKERS := noupx upx
 
 # --- Docker Build Variants (Base names for easier reference) ---
+DOCKER_BUILD_PREFIX := build_docker
 DOCKER_IMAGE_PREFIX := docker-go-nix-simple
 DOCKER_BASES := distroless scratch
 DOCKER_CACHES := docker athens http none
@@ -61,20 +64,21 @@ NIX_IMAGE_TARGETS := $(foreach base,$(NIX_BASES), \
 DOCKER_IMAGE_TARGETS := $(foreach base,$(DOCKER_BASES), \
                           $(foreach cache,$(DOCKER_CACHES), \
                             $(foreach packer,$(DOCKER_PACKERS), \
-                              $(DOCKER_TARGET_PREFIX)-$(base)-$(cache)-$(packer))))
+                              $(DOCKER_BUILD_PREFIX)-$(base)-$(cache)-$(packer))))
 
 # No filters yet
-INVALID_DOCKER_COMBOS :=
+INVALID_DOCKER_COMBOS := $(filter %-foo-bar, $(DOCKER_IMAGE_TARGETS))
 # INVALID_DOCKER_COMBOS := $(filter %-athens-upx, $(DOCKER_IMAGE_TARGETS)) \
 #                          $(filter %-http-upx, $(DOCKER_IMAGE_TARGETS)) \
 #                          $(filter %-none-upx, $(DOCKER_IMAGE_TARGETS)) \
 #                          $(filter %-scratch-athens-upx, $(DOCKER_IMAGE_TARGETS))
 
-#VALID_DOCKER_IMAGE_TARGETS := $(filter-out $(INVALID_DOCKER_COMBOS), $(DOCKER_IMAGE_TARGETS))
+VALID_DOCKER_IMAGE_TARGETS := $(filter-out $(INVALID_DOCKER_COMBOS), $(DOCKER_IMAGE_TARGETS))
 
 # --- Generate Lists of Validation Targets ---
 VALIDATE_NIX_TARGETS := $(NIX_IMAGE_TARGETS:build-%=validate-%)
-VALIDATE_DOCKER_TARGETS := $(VALID_DOCKER_IMAGE_TARGETS:build-%=validate-%)
+
+VALIDATE_DOCKER_TARGETS := $(VALID_DOCKER_IMAGE_TARGETS:$(DOCKER_BUILD_PREFIX)-%=validate_docker-%)
 ALL_VALIDATE_TARGETS := $(VALIDATE_NIX_TARGETS) $(VALIDATE_DOCKER_TARGETS)
 
 
@@ -95,12 +99,15 @@ ALL_VALIDATE_TARGETS := $(VALIDATE_NIX_TARGETS) $(VALIDATE_DOCKER_TARGETS)
 
 # --- Aggregate Targets ---
 all: prepare-output-dir all-nix all-docker summary
+all-validate: prepare-output-dir all-nix all-docker validate-all summary validation-summary
 all-nix: prepare-output-dir $(NIX_IMAGE_TARGETS)
-all-docker: prepare-output-dir $(VALID_DOCKER_IMAGE_TARGETS)
+all-docker: prepare-output-dir generate-containerfiles $(VALID_DOCKER_IMAGE_TARGETS)
 
 validate-all: $(ALL_VALIDATE_TARGETS)
 validate-all-nix: $(VALIDATE_NIX_TARGETS)
 validate-all-docker: $(VALIDATE_DOCKER_TARGETS)
+
+# e.g. make validate-all -j1
 
 # --- Prepare Output Directory ---
 prepare-output-dir:
@@ -116,7 +123,7 @@ generate-containerfiles:
 	$(call time_command, $@, $(GENERATOR_BIN) --output $(CONTAINERFILE_DIR))
 
 #--------------------------
-# Validator Build Target   # <-- NEW SECTION
+# Validator Build Target
 build-validator:
 	@echo "[$($(TIMESTAMP))] Building validator tool..."
 	@$(MAKE) -C $(VALIDATOR_DIR) build
@@ -139,11 +146,11 @@ load-nix-result: result
 #--------------------------
 # Docker Build Targets
 
-$(VALID_DOCKER_IMAGE_TARGETS): $(DOCKER_TARGET_PREFIX)-% : prepare-output-dir generate-containerfiles
+$(VALID_DOCKER_IMAGE_TARGETS): $(DOCKER_BUILD_PREFIX)-% : prepare-output-dir
 	./scripts/build_docker_image.sh \
-		"$(strip $(word 1,$(subst -, ,$(patsubst $(DOCKER_TARGET_PREFIX)-%,%,$@))))" \
-		"$(strip $(word 2,$(subst -, ,$(patsubst $(DOCKER_TARGET_PREFIX)-%,%,$@))))" \
-		"$(strip $(word 3,$(subst -, ,$(patsubst $(DOCKER_TARGET_PREFIX)-%,%,$@))))" \
+		"$(strip $(word 1,$(subst -, ,$(patsubst $(DOCKER_BUILD_PREFIX)-%,%,$@))))" \
+		"$(strip $(word 2,$(subst -, ,$(patsubst $(DOCKER_BUILD_PREFIX)-%,%,$@))))" \
+		"$(strip $(word 3,$(subst -, ,$(patsubst $(DOCKER_BUILD_PREFIX)-%,%,$@))))" \
 		"$(strip $(VERSION))" \
 		"$(strip $(COMMIT))" \
 		"$(strip $(DATE))" \
@@ -156,29 +163,33 @@ $(VALID_DOCKER_IMAGE_TARGETS): $(DOCKER_TARGET_PREFIX)-% : prepare-output-dir ge
 #--------------------------
 # Validation Targets
 
-# Generic rule for validating Nix images
+# Generic rule for validating Nix images (Calls script)
 $(VALIDATE_NIX_TARGETS): validate-$(NIX_IMAGE_PREFIX)-% : build-$(NIX_IMAGE_PREFIX)-% build-validator
-	@echo "[$($(TIMESTAMP))] Validating Nix image $(subst validate-,, $@)..."
+	@mkdir -p $(VALIDATION_OUTPUT_DIR) # Create validation dir
 	$(eval IMAGE_TAG_TO_VALIDATE := $(strip $(REPO_PREFIX)/$(subst image-nix-,nix-go-nix-simple-,$(NIX_IMAGE_PREFIX)-$(*)):$(VERSION)))
-	$(VALIDATOR_BIN) -images="$(IMAGE_TAG_TO_VALIDATE)" -timeout=30s
+	./scripts/validate_image.sh "$@" "$(VALIDATOR_BIN)" "$(IMAGE_TAG_TO_VALIDATE)" "30" "$(VALIDATION_OUTPUT_DIR)"
 
-# Generic rule for validating Docker images
-validate-$(DOCKER_TARGET_PREFIX)-% : $(DOCKER_TARGET_PREFIX)-% build-validator
-	@echo "[$($(TIMESTAMP))] Validating Docker image $(subst validate-,, $@)..."
-	# *** Adjust tag calculation to use $@ and patsubst ***
-	$(eval STEM := $(patsubst validate-$(DOCKER_TARGET_PREFIX)-%,%,$@))
-	$(eval IMAGE_TAG_TO_VALIDATE := $(strip $(REPO_PREFIX)/$(subst $(DOCKER_TARGET_PREFIX)-,$(DOCKER_IMAGE_PREFIX)-,$(DOCKER_TARGET_PREFIX)-$(STEM)):$(VERSION)))
-	$(VALIDATOR_BIN) -images="$(IMAGE_TAG_TO_VALIDATE)" -timeout=30s
+# Generic rule for validating Docker images (Calls script)
+$(VALIDATE_DOCKER_TARGETS) : validate_docker-% : $(DOCKER_BUILD_PREFIX)-% build-validator
+	@mkdir -p $(VALIDATION_OUTPUT_DIR) # Create validation dir
+	@echo "[$($(TIMESTAMP))] Validating Docker image $(subst validate_docker-,build_docker-, $@)..."
+	# Use $(*) for the stem
+	$(eval STEM := $(*))
+	$(eval IMAGE_TAG_TO_VALIDATE := $(strip $(REPO_PREFIX)/$(subst $(DOCKER_BUILD_PREFIX)-,$(DOCKER_IMAGE_PREFIX)-,$(DOCKER_BUILD_PREFIX)-$(STEM)):$(VERSION)))
+	./scripts/validate_image.sh "$@" "$(VALIDATOR_BIN)" "$(IMAGE_TAG_TO_VALIDATE)" "30" "$(VALIDATION_OUTPUT_DIR)"
 
 #--------------------------
 # Summary Target
 
 ALL_NIX_IMAGE_TAGS := $(foreach target,$(NIX_IMAGE_TARGETS),$(REPO_PREFIX)/$(subst build-,,$(target)):$(VERSION))
-ALL_DOCKER_IMAGE_TAGS := $(foreach target,$(VALID_DOCKER_IMAGE_TARGETS),$(REPO_PREFIX)/$(subst build-docker-image-,$(DOCKER_IMAGE_PREFIX)-,$(target)):$(VERSION))
+ALL_DOCKER_IMAGE_TAGS := $(foreach target,$(VALID_DOCKER_IMAGE_TARGETS),$(REPO_PREFIX)/$(subst $(DOCKER_BUILD_PREFIX)-,$(DOCKER_IMAGE_PREFIX)-,$(target)):$(VERSION))
 ALL_IMAGE_TAGS := $(ALL_NIX_IMAGE_TAGS) $(ALL_DOCKER_IMAGE_TAGS)
 
 summary:
 	./scripts/generate_summary.sh
+
+validation-summary:
+	./scripts/generate_validation_summary.sh
 
 #--------------------------
 # Other Utility Targets (Keep relevant ones)
@@ -257,6 +268,12 @@ flake_metadata:
 
 flake_show:
 	nix flake show
+
+flake_update:
+	nix flake update
+
+flake_develop:
+	nix develop
 
 #------------------------
 # bazel

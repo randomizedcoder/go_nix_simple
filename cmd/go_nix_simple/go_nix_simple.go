@@ -30,7 +30,7 @@ const (
 
 	debugLevelCst = 11 // Default debug level
 
-	promListenCst           = ":9108"
+	//promListenCst           = ":9108"
 	promPathCst             = "/metrics"
 	promMaxRequestsInFlight = 10
 	promEnableOpenMetrics   = true
@@ -68,10 +68,6 @@ var (
 
 func main() {
 
-	// ./gdp --profile.mode cpu
-	// timeout 1h ./gdp --profile.mode cpu
-	profileMode := flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, memheap, mutex, block, trace, goroutine]")
-
 	pyroscopeServer := flag.String("pyroscope.server", "", "Pyroscope server address (e.g., http://localhost:4040)")
 	pyroscopeApp := flag.String("pyroscope.app", "go_nix_simple", "Application name for Pyroscope")
 
@@ -85,6 +81,13 @@ func main() {
 	redisAddr := flag.String("redis.addr", defaultRedisAddr, "Redis server address (host:port)")
 	redisPassword := flag.String("redis.password", "", "Redis password (optional)")
 	redisDB := flag.Int("redis.db", 0, "Redis database number")
+
+	// ./gdp --profile.mode cpu
+	// timeout 1h ./gdp --profile.mode cpu
+	profileMode := flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, memheap, mutex, block, trace, goroutine]")
+	promPort := flag.Uint("prom.port", 9108, "Prometheus port")
+
+	promListAddr := fmt.Sprintf(":%d", *promPort)
 
 	d := flag.Uint("d", debugLevelCst, "debug level")
 	v := flag.Bool("v", false, "show version")
@@ -113,6 +116,8 @@ func main() {
 	var sigHandlerWg sync.WaitGroup
 	sigHandlerWg.Add(1)
 	go initSignalHandler(cancel, complete, &sigHandlerWg)
+
+	go initPromHandler(ctx, promPathCst, promListAddr)
 
 	// "github.com/pkg/profile"
 	// https://dave.cheney.net/2013/07/07/introducing-profile-super-simple-profiling-for-go-programs
@@ -214,8 +219,6 @@ func main() {
 			}
 		}
 	}()
-
-	go initPromHandler(ctx, promPathCst, promListenCst)
 
 	log.Println("Starting main application loop...")
 	var wg sync.WaitGroup

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -32,16 +33,47 @@ const (
 	defaultMetricTarget    = `counters_main{function="loop",type="count",variable="tick"}`
 	defaultMetricThreshold = 2.0
 	defaultParallelism     = 1
+
+	defaultVersion    = "1.0.0"
+	defaultRepoPrefix = "randomizedcoder"
+
+	nixImagePrefix    = "nix-go-nix-simple"
+	dockerImagePrefix = "docker-go-nix-simple"
 )
 
 type ValidationResult struct {
-	ImageTag string
-	Success  bool
-	Error    error
-	Duration time.Duration
+	ImageTag     string
+	LogCheck     CheckResult
+	MetricCheck  CheckResult
+	OverallError error
+	Duration     time.Duration
+	LogBuffer    strings.Builder
 }
 
+type CheckResult struct {
+	Success bool
+	Error   error
+}
+
+func (vr ValidationResult) OverallSuccess() bool {
+	return vr.LogCheck.Success && vr.MetricCheck.Success && vr.OverallError == nil
+}
+
+var (
+	mainLogger = log.New(os.Stdout, "", log.LstdFlags|log.Lmicroseconds|log.LUTC)
+
+	nixBases    = []string{"distroless", "scratch"}
+	nixBuilders = []string{"buildgomodule", "gomod2nix"}
+	nixPackers  = []string{"noupx", "upx"}
+
+	dockerBases   = []string{"distroless", "scratch"}
+	dockerCaches  = []string{"docker", "athens", "http", "none"}
+	dockerPackers = []string{"noupx", "upx"}
+)
+
 func main() {
+
+	log.SetOutput(io.Discard)
 
 	imageTagsRaw := flag.String("images", "", "Comma-separated list of Docker image tags to validate (required)")
 	parallelism := flag.Int("parallel", defaultParallelism, "Number of concurrent validation tests to run")
@@ -49,20 +81,41 @@ func main() {
 	logTarget := flag.String("log-target", defaultLogTarget, "Log line prefix to wait for")
 	metricTarget := flag.String("metric-target", defaultMetricTarget, "Prometheus metric name (with labels) to check")
 	metricThreshold := flag.Float64("metric-threshold", defaultMetricThreshold, "Minimum value for the target metric")
+	version := flag.String("version", defaultVersion, "Version tag for images (used with -images=all)")
+	repoPrefix := flag.String("repo-prefix", defaultRepoPrefix, "Repository prefix (e.g., dockerhub username) for images (used with -images=all)")
 
 	flag.Parse()
 
+	var imageTags []string
+
 	if *imageTagsRaw == "" {
-		log.Fatal("Error: -images flag is required")
-	}
-	imageTags := strings.Split(*imageTagsRaw, ",")
-	if len(imageTags) == 0 {
-		log.Fatal("Error: No image tags provided")
+		log.Fatal("Error: -images flag is required (provide comma-separated list or 'all')")
+	} else if strings.ToLower(*imageTagsRaw) == "all" {
+		log.Printf("Generating all known image tags for version %s with prefix %s...", *version, *repoPrefix)
+		imageTags = generateAllImageTags(*repoPrefix, *version)
+		if len(imageTags) == 0 {
+			log.Fatal("Error: Failed to generate any image tags for 'all'")
+		}
+		log.Printf("Generated %d image tags.", len(imageTags))
+	} else {
+
+		tagsFromFlag := strings.Split(*imageTagsRaw, ",")
+
+		for _, tag := range tagsFromFlag {
+			trimmedTag := strings.TrimSpace(tag)
+			if trimmedTag != "" {
+				imageTags = append(imageTags, trimmedTag)
+			}
+		}
+		if len(imageTags) == 0 {
+			log.Fatal("Error: No valid image tags provided in the list")
+		}
 	}
 
-	log.Printf("Starting validation for %d image(s) with parallelism %d and timeout %v", len(imageTags), *parallelism, *timeout)
+	mainLogger.Printf("Starting validation for %d image(s) with parallelism %d and timeout %v", len(imageTags), *parallelism, *timeout)
 
 	ctx := context.Background()
+	validationStartTime := time.Now()
 
 	// --- Setup Worker Pool ---
 	jobs := make(chan string, len(imageTags))
@@ -80,7 +133,7 @@ func main() {
 	log.Printf("Starting %d worker(s)", numWorkers)
 	for w := 1; w <= numWorkers; w++ {
 		wg.Add(1)
-		go worker(ctx, w, jobs, results, &wg, *timeout, *logTarget, *metricTarget, *metricThreshold)
+		go worker(ctx, w, jobs, results, &wg, *timeout, *logTarget, *metricTarget, *metricThreshold, mainLogger)
 	}
 
 	// --- Send Jobs ---
@@ -90,34 +143,135 @@ func main() {
 			jobs <- trimmedTag
 		}
 	}
-	close(jobs) // Signal that no more jobs will be sent
+	close(jobs)
 
 	// --- Wait for Workers and Collect Results ---
-	wg.Wait()      // Wait for all workers to finish processing
-	close(results) // Close results channel once all workers are done
+	wg.Wait()
+	close(results)
+	totalValidationDuration := time.Since(validationStartTime) // Calculate total duration
+
+	// --- Store results for summary ---
+	var processedResults []ValidationResult
+	allSuccessOverall := true
+
+	for res := range results {
+		processedResults = append(processedResults, res)
+		if !res.OverallSuccess() {
+			allSuccessOverall = false
+		}
+	}
 
 	// --- Report Results ---
-	log.Println("--- Validation Summary ---")
-	allSuccess := true
-	for res := range results {
-		status := "SUCCESS"
-		errMsg := ""
-		if !res.Success {
-			status = "FAILED"
-			allSuccess = false
-			if res.Error != nil {
-				errMsg = fmt.Sprintf(" Error: %v", res.Error)
-			}
-		}
-		log.Printf("[%s] %s (Duration: %v)%s", status, res.ImageTag, res.Duration, errMsg)
-	}
-	log.Println("--------------------------")
+	mainLogger.Println("--- Validation Summary ---")
 
-	if !allSuccess {
-		log.Println("One or more validations failed.")
+	// Sort results alphabetically (optional)
+	// sort.Slice(processedResults, func(i, j int) bool {
+	// 	return processedResults[i].ImageTag < processedResults[j].ImageTag
+	// })
+
+	// --- Print Table Header ---
+	// Adjust column widths as needed
+	mainLogger.Printf("%-80s %-8s %-8s %-18s %s", "Image Tag", "Log", "Metric", "Duration", "Overall Error")
+	mainLogger.Println(strings.Repeat("-", 120)) // Separator line
+
+	totalChecks := 0
+	passedChecks := 0
+	var failedLogsOutput strings.Builder
+
+	// --- Print Table Rows ---
+	for _, res := range processedResults {
+		totalChecks += 2 // Log + Metric
+
+		logStatus := "FAIL"
+		if res.LogCheck.Success {
+			logStatus = "PASS"
+			passedChecks++
+		}
+
+		metricStatus := "FAIL"
+		if res.MetricCheck.Success {
+			metricStatus = "PASS"
+			passedChecks++
+		}
+
+		overallErrorStr := ""
+		if res.OverallError != nil {
+			overallErrorStr = res.OverallError.Error()
+			// Optionally truncate long errors
+			// if len(overallErrorStr) > 50 {
+			//  overallErrorStr = overallErrorStr[:47] + "..."
+			// }
+		}
+
+		// Print formatted row
+		mainLogger.Printf("%-80s %-8s %-8s %-18s %s",
+			res.ImageTag,
+			logStatus,
+			metricStatus,
+			res.Duration.Round(time.Millisecond).String(), // Format duration
+			overallErrorStr,
+		)
+
+		// Store logs if this image failed overall
+		if !res.OverallSuccess() {
+			failedLogsOutput.WriteString(fmt.Sprintf("\n--- Logs for FAILED image: %s ---\n", res.ImageTag))
+			failedLogsOutput.WriteString(res.LogBuffer.String())
+			failedLogsOutput.WriteString("--- End Logs ---\n")
+		}
+	}
+
+	// --- Print Footer ---
+	mainLogger.Println(strings.Repeat("-", 120)) // Separator line
+	failedChecks := totalChecks - passedChecks
+	mainLogger.Printf("Total Images: %d | Total Checks: %d | Passed Checks: %d | Failed Checks: %d",
+		len(processedResults), totalChecks, passedChecks, failedChecks)
+	mainLogger.Printf("Total Validation Duration: %v", totalValidationDuration.Round(time.Second)) // Print total duration
+	mainLogger.Println("--------------------------")
+
+	// Print logs for failed tests if any occurred
+	if failedLogsOutput.Len() > 0 {
+		mainLogger.Printf("\n--- Details for Failed Validations ---")
+		os.Stdout.WriteString(failedLogsOutput.String())
+	}
+
+	// Exit based on overall success
+	if !allSuccessOverall {
+		mainLogger.Println("\nOne or more image validations failed.")
 		os.Exit(1)
 	}
-	log.Println("All validations passed.")
+	mainLogger.Println("\nAll image validations passed.")
+}
+
+func generateAllImageTags(repoPrefix, version string) []string {
+	var allTags []string
+
+	for _, base := range nixBases {
+		for _, builder := range nixBuilders {
+			for _, packer := range nixPackers {
+				tag := fmt.Sprintf("%s/%s-%s-%s-%s:%s",
+					repoPrefix, nixImagePrefix, base, builder, packer, version)
+				allTags = append(allTags, tag)
+			}
+		}
+	}
+
+	for _, base := range dockerBases {
+		for _, cache := range dockerCaches {
+			for _, packer := range dockerPackers {
+				// // --- Apply filtering logic  ---
+				// if cache != "docker" && packer == "upx" {
+				// 	log.Printf("Skipping Docker tag generation for: base=%s, cache=%s, packer=%s (UPX only with 'docker' cache)", base, cache, packer)
+				// 	continue
+				// }
+
+				tag := fmt.Sprintf("%s/%s-%s-%s-%s:%s",
+					repoPrefix, dockerImagePrefix, base, cache, packer, version)
+				allTags = append(allTags, tag)
+			}
+		}
+	}
+
+	return allTags
 }
 
 // worker executes validation jobs received from the jobs channel.
@@ -127,181 +281,232 @@ func worker(ctxIn context.Context,
 	wg *sync.WaitGroup,
 	timeout time.Duration,
 	logTarget, metricTarget string,
-	metricThreshold float64) {
+	metricThreshold float64,
+	workerLogger *log.Logger) {
 
 	defer wg.Done()
-	log.Printf("Worker %d started", id)
+
+	workerLogger.Printf("Worker %d started", id)
+
 	for imageTag := range jobs {
+
 		log.Printf("Worker %d: Validating image %s", id, imageTag)
 		startTime := time.Now()
-		ctx, cancel := context.WithTimeout(ctxIn, timeout)
-		success, err := validateImage(ctx, imageTag, logTarget, metricTarget, metricThreshold)
-		cancel() // Release context resources promptly
-		duration := time.Since(startTime)
 
-		results <- ValidationResult{
-			ImageTag: imageTag,
-			Success:  success,
-			Error:    err,
-			Duration: duration,
-		}
-		log.Printf("Worker %d: Finished validating %s (Success: %t, Duration: %v)", id, imageTag, success, duration)
+		ctx, cancel := context.WithTimeout(ctxIn, timeout)
+
+		var logBuf strings.Builder
+		jobLogger := log.New(io.MultiWriter(&logBuf, io.Discard), fmt.Sprintf("W%d [%s]: ", id, imageTag[:min(15, len(imageTag))]), log.Ltime|log.Lmicroseconds)
+
+		res := validateImage(ctx, imageTag, logTarget, metricTarget, metricThreshold, jobLogger, &logBuf)
+		res.Duration = time.Since(startTime)
+		res.LogBuffer = logBuf
+
+		cancel()
+
+		results <- res
+
+		workerLogger.Printf("Worker %d: Finished validating %s (Overall Success: %t, Duration: %v)", id, imageTag, res.OverallSuccess(), res.Duration)
 	}
-	log.Printf("Worker %d finished", id)
+	workerLogger.Printf("Worker %d finished", id)
 }
 
 // validateImage performs the actual validation steps for a single image.
-func validateImage(ctx context.Context, imageTag, logTarget, metricTarget string, metricThreshold float64) (bool, error) {
+func validateImage(
+	ctx context.Context,
+	imageTag, logTarget, metricTarget string,
+	metricThreshold float64,
+	jobLogger *log.Logger,
+	logBuf *strings.Builder) ValidationResult {
+
+	// Initialize result struct
+	result := ValidationResult{
+		ImageTag: imageTag,
+		// Checks default to failure until proven successful
+		LogCheck:    CheckResult{Success: false},
+		MetricCheck: CheckResult{Success: false},
+	}
 
 	// --- 1. Create Docker Client ---
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return false, fmt.Errorf("failed to create docker client: %w", err)
+		result.OverallError = fmt.Errorf("failed to create docker client: %w", err)
+		jobLogger.Printf("ERROR: %v", result.OverallError)
+		return result
 	}
 	defer cli.Close()
 
-	// --- 2. Pull Image (Optional but good practice) ---
-	// Ensures the image exists locally before trying to run
-	log.Printf("Pulling image %s (best effort)...", imageTag)
-	pullCtx, pullCancel := context.WithTimeout(ctx, 2*time.Minute) // Separate timeout for pull
-	_, err = cli.ImagePull(pullCtx, imageTag, image.PullOptions{})
+	// --- 2. Pull Image ---
+	jobLogger.Printf("Pulling image (best effort)...")
+	pullCtx, pullCancel := context.WithTimeout(ctx, 2*time.Minute)
+	pullReader, err := cli.ImagePull(pullCtx, imageTag, image.PullOptions{})
+	if err == nil {
+		_, copyErr := io.Copy(logBuf, pullReader)
+		pullReader.Close()
+		if copyErr != nil {
+			jobLogger.Printf("Warning: Error reading image pull output: %v", copyErr)
+		}
+	}
 	pullCancel()
 	if err != nil {
-		log.Printf("Warning: Failed to pull image %s (will try to run anyway): %v", imageTag, err)
-		// Don't necessarily fail here, maybe it exists locally
+		jobLogger.Printf("Warning: Failed to pull image (will try to run anyway): %v", err)
 	}
 
 	// --- 3. Create and Start Container ---
-	// TODO: Consider using host network mode for easier port access, or handle port mapping.
-	// For now, assuming host port is same as container port (requires mapping or host mode)
 	containerPortStr := "9108/tcp"
-	hostPortStr := "9108"
-
-	// Use nat.PortSet for ExposedPorts
+	//hostPortStr := "9108"
 	exposedPortsSet := nat.PortSet{nat.Port(containerPortStr): {}}
-
-	// Use nat.PortBinding for PortBindings
 	portBindingsMap := nat.PortMap{
 		nat.Port(containerPortStr): []nat.PortBinding{
 			{
 				HostIP:   "0.0.0.0",
-				HostPort: hostPortStr,
+				HostPort: "",
 			},
 		},
 	}
 
-	resp, err := cli.ContainerCreate(ctx, &container.Config{
-		Image:        imageTag,
-		ExposedPorts: exposedPortsSet, // Use nat.PortSet
-	}, &container.HostConfig{
-		PortBindings: portBindingsMap, // Use nat.PortMap and nat.PortBinding
-		AutoRemove:   true,
-		// NetworkMode: "host",
-	}, nil, nil, "")
+	resp, err := cli.ContainerCreate(
+		ctx,
+		&container.Config{
+			Image:        imageTag,
+			ExposedPorts: exposedPortsSet,
+		},
+		&container.HostConfig{
+			PortBindings: portBindingsMap,
+			AutoRemove:   true,
+		}, nil, nil, "")
 	if err != nil {
-		return false, fmt.Errorf("failed to create container: %w", err)
+		result.OverallError = fmt.Errorf("failed to create container: %w", err)
+		return result // Return early
 	}
 	containerID := resp.ID
 	log.Printf("Created container %s", containerID[:12])
 
-	// Defer container stop and removal (AutoRemove should handle removal)
 	defer func() {
 		log.Printf("Stopping container %s...", containerID[:12])
-		// Use a separate background context for cleanup in case the main context timed out
 		stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer stopCancel()
-		// Use ContainerStop with nil timeout for default behavior
 		if err := cli.ContainerStop(stopCtx, containerID, container.StopOptions{}); err != nil {
-			// Log error but don't fail validation just because stop failed
 			log.Printf("Warning: Failed to stop container %s: %v", containerID[:12], err)
 		} else {
 			log.Printf("Stopped container %s", containerID[:12])
 		}
-		// AutoRemove should handle removal, but ContainerRemove can be added as fallback if needed
 	}()
 
 	if err := cli.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
-		return false, fmt.Errorf("failed to start container: %w", err)
+		result.OverallError = fmt.Errorf("failed to start container: %w", err)
+		return result
 	}
 	log.Printf("Started container %s", containerID[:12])
 
+	// --- 3.5 Inspect Container to Get Assigned Port ---
+	var assignedHostPort string // Variable to store the dynamic port
+	inspectResp, err := cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		result.OverallError = fmt.Errorf("failed to inspect container %s: %w", containerID[:12], err)
+		return result
+	}
+
+	// Find the port mapping
+	if portMap, ok := inspectResp.NetworkSettings.Ports[nat.Port(containerPortStr)]; ok && len(portMap) > 0 {
+		assignedHostPort = portMap[0].HostPort // Get the first assigned host port
+		log.Printf("Container %s assigned host port %s for container port %s", containerID[:12], assignedHostPort, containerPortStr)
+	} else {
+		result.OverallError = fmt.Errorf("could not find assigned host port for %s in container %s", containerPortStr, containerID[:12])
+		return result
+	}
+	if assignedHostPort == "" {
+		result.OverallError = fmt.Errorf("assigned host port for %s is empty in container %s", containerPortStr, containerID[:12])
+		return result
+	}
+
 	// --- 4. Check Logs ---
-	logCheckCtx, logCheckCancel := context.WithCancel(ctx) // Separate cancel for log routine
+	logCheckCtx, logCheckCancel := context.WithCancel(ctx)
 	defer logCheckCancel()
-	logFound := make(chan bool, 1)
+	logFoundChan := make(chan error, 1)
 	go func() {
-		defer func() { log.Printf("Log check routine finished for %s", containerID[:12]) }()
+		defer func() { jobLogger.Printf("Log check routine finished.") }()
 		logReader, err := cli.ContainerLogs(logCheckCtx, containerID, container.LogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Timestamps: false})
 		if err != nil {
-			log.Printf("Error getting container logs: %v", err)
-			logFound <- false // Signal failure
+			jobLogger.Printf("Error getting container logs: %v", err)
+			logFoundChan <- err
 			return
 		}
 		defer logReader.Close()
 
-		scanner := bufio.NewScanner(logReader)
-		log.Printf("Watching logs for '%s'...", logTarget)
+		logTee := io.TeeReader(logReader, logBuf)
+		scanner := bufio.NewScanner(logTee)
+		jobLogger.Printf("Watching logs for '%s'...", logTarget)
 		for scanner.Scan() {
 			line := scanner.Text()
-			// Simple prefix check, adjust if full line match or regex is needed
+
 			if strings.Contains(line, logTarget) {
-				log.Printf("Found target log line: %s", line)
-				logFound <- true // Signal success
+				jobLogger.Printf("Found target log line: %s", line)
+				logFoundChan <- nil
 				return
 			}
-			// Optional: Print logs for debugging
-			// log.Printf("Container Log: %s", line)
 		}
-		if err := scanner.Err(); err != nil && !errors.Is(err, context.Canceled) {
-			log.Printf("Error reading container logs: %v", err)
+		scanErr := scanner.Err()
+		if scanErr != nil && !errors.Is(scanErr, context.Canceled) {
+			jobLogger.Printf("Error reading container logs: %v", scanErr)
+			logFoundChan <- scanErr
+		} else {
+			logFoundChan <- fmt.Errorf("target log line not found before log stream ended")
 		}
-		// If loop finishes without finding the target (e.g., context cancelled)
-		logFound <- false
 	}()
 
-	// Wait for log check result or timeout
 	select {
-	case found := <-logFound:
-		if !found {
-			return false, fmt.Errorf("target log line '%s' not found", logTarget)
+	case logErr := <-logFoundChan:
+		if logErr == nil {
+			result.LogCheck.Success = true
+			jobLogger.Printf("Log check successful.")
+		} else {
+			result.LogCheck.Error = logErr
+			jobLogger.Printf("Log check failed: %v", logErr)
 		}
-		log.Printf("Log check successful.")
 	case <-ctx.Done():
-		return false, fmt.Errorf("timeout waiting for log line '%s': %w", logTarget, ctx.Err())
+		result.LogCheck.Error = fmt.Errorf("timeout waiting for log line '%s': %w", logTarget, ctx.Err())
+		jobLogger.Printf("Log check failed: %v", result.LogCheck.Error)
+		// default: // non-blocking
+	}
+
+	if !result.LogCheck.Success {
+		jobLogger.Printf("Skipping metric check because log check failed.")
+		return result
 	}
 
 	// --- 5. Check Metrics ---
-	// Add a small delay to ensure metrics are likely updated after the log line appears
 	time.Sleep(1 * time.Second)
-
-	metricURL := fmt.Sprintf("http://localhost:%s/metrics", hostPortStr)
-	log.Printf("Checking metrics at %s for '%s' >= %.1f", metricURL, metricTarget, metricThreshold)
+	metricURL := fmt.Sprintf("http://localhost:%s/metrics", assignedHostPort)
+	jobLogger.Printf("Checking metrics at %s for '%s' >= %.1f", metricURL, metricTarget, metricThreshold)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", metricURL, nil)
 	if err != nil {
-		return false, fmt.Errorf("failed to create metrics request: %w", err)
+		result.MetricCheck.Error = fmt.Errorf("failed to create metrics request: %w", err)
+		jobLogger.Printf("Metric check failed: %v", result.MetricCheck.Error)
+		return result
 	}
-
 	respHttp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("failed to get metrics: %w", err)
+		result.MetricCheck.Error = fmt.Errorf("failed to get metrics: %w", err)
+		jobLogger.Printf("Metric check failed: %v", result.MetricCheck.Error)
+		return result
 	}
 	defer respHttp.Body.Close()
-
 	if respHttp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("metrics endpoint returned status %d", respHttp.StatusCode)
+		result.MetricCheck.Error = fmt.Errorf("metrics endpoint returned status %d", respHttp.StatusCode)
+		jobLogger.Printf("Metric check failed: %v", result.MetricCheck.Error)
+		return result
 	}
-
-	// Parse Prometheus exposition format
-	// https://pkg.go.dev/github.com/prometheus/common/expfmt
 	var parser expfmt.TextParser
 	metricFamilies, err := parser.TextToMetricFamilies(respHttp.Body)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse metrics: %w", err)
+		result.MetricCheck.Error = fmt.Errorf("failed to parse metrics: %w", err)
+		jobLogger.Printf("Metric check failed: %v", result.MetricCheck.Error)
+		return result
 	}
 
-	// Find the target metric
-	// This parsing is basic, might need refinement based on exact metricTarget format
+	// ... (metric finding logic remains the same) ...
 	metricName := metricTarget
 	labels := model.LabelSet{}
 	if idx := strings.Index(metricTarget, "{"); idx != -1 && strings.HasSuffix(metricTarget, "}") {
@@ -312,27 +517,25 @@ func validateImage(ctx context.Context, imageTag, logTarget, metricTarget string
 			parts := strings.SplitN(pair, "=", 2)
 			if len(parts) == 2 {
 				key := strings.TrimSpace(parts[0])
-				// Need to unquote the label value
 				val, err := strconv.Unquote(strings.TrimSpace(parts[1]))
 				if err != nil {
-					return false, fmt.Errorf("failed to parse label value in '%s': %w", pair, err)
+					result.MetricCheck.Error = fmt.Errorf("failed to parse label value in '%s': %w", pair, err)
+					return result
 				}
 				labels[model.LabelName(key)] = model.LabelValue(val)
 			}
 		}
 	}
-
 	mf, found := metricFamilies[metricName]
 	if !found {
-		return false, fmt.Errorf("metric '%s' not found", metricName)
+		result.MetricCheck.Error = fmt.Errorf("metric '%s' not found", metricName)
+		return result
 	}
-
-	// Find the specific metric instance matching the labels
-	var metricValue float64 = -1 // Default to invalid value
+	var metricValue float64 = -1
 	for _, m := range mf.GetMetric() {
 		match := true
 		if len(labels) != len(m.GetLabel()) {
-			match = false // Quick check: different number of labels
+			match = false
 		} else {
 			for ln, lv := range labels {
 				foundLabel := false
@@ -348,29 +551,35 @@ func validateImage(ctx context.Context, imageTag, logTarget, metricTarget string
 				}
 			}
 		}
-
 		if match {
-			// Found the metric, get its value (assuming it's a Counter or Gauge)
 			if m.GetCounter() != nil {
 				metricValue = m.GetCounter().GetValue()
 			} else if m.GetGauge() != nil {
 				metricValue = m.GetGauge().GetValue()
-			} // Add Untyped if needed
+			}
 			break
 		}
 	}
-
 	if metricValue < 0 {
-		return false, fmt.Errorf("metric '%s' with specified labels not found", metricTarget)
+		result.MetricCheck.Error = fmt.Errorf("metric '%s' with specified labels not found", metricTarget)
+		return result
 	}
-
-	// Check threshold
 	if metricValue < metricThreshold {
-		return false, fmt.Errorf("metric '%s' value %.1f is below threshold %.1f", metricTarget, metricValue, metricThreshold)
+		result.MetricCheck.Error = fmt.Errorf("metric '%s' value %.1f is below threshold %.1f", metricTarget, metricValue, metricThreshold)
+		return result
 	}
 
+	// If we reach here, metric check passed
+	result.MetricCheck.Success = true
 	log.Printf("Metric check successful ('%s' value %.1f >= %.1f).", metricTarget, metricValue, metricThreshold)
 
-	// --- 6. Success ---
-	return true, nil
+	// --- 6. Return Detailed Result ---
+	return result
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

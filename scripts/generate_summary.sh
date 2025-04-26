@@ -62,14 +62,14 @@ fi
 # --- Phase 3: Generate Summary Content ---
 # Use a temporary variable to store the summary content
 summary_content=""
-header_line_1="========================================================================================"
+header_line_1="============================================================================================="
 header_line_2="Build Summary - From Directory: ${LATEST_OUTPUT_DIR}"
 header_line_3="Target                                                      | Time (ms) | Size (MB) | Layers"
 header_line_4="------------------------------------------------------------|-----------|-----------|--------"
 
 summary_content+="${header_line_1}\n"
 summary_content+="${header_line_2}\n"
-summary_content+="${header_line_1}\n" # Repeat separator
+summary_content+="${header_line_1}\n"
 summary_content+="${header_line_3}\n"
 summary_content+="${header_line_4}\n"
 
