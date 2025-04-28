@@ -129,6 +129,9 @@ build-validator:
 	@$(MAKE) -C $(VALIDATOR_DIR) build
 	@echo "[$($(TIMESTAMP))] Finished building validator tool."
 
+run-valdiator:
+	./cmd/validate-image/validate-image --parallel 8
+
 #--------------------------
 # Nix Build Targets
 
@@ -220,6 +223,31 @@ down_athens:
 athens_traffic:
 	sudo tcpdump -ni any port 8888
 
+
+#--------------------------
+# docker compose squid
+
+squid: create_squid deploy_squid
+
+create_squid:
+	docker build -t my-custom-squid:latest \
+		-f ./build/containers/squid/Containerfile \
+		./build/containers/squid/
+
+deploy_squid:
+	@echo "================================"
+	@echo "Make deploy_squid"
+	docker compose \
+		--file build/containers/squid/docker-compose-squid.yml \
+		up -d --remove-orphans
+
+down_squid:
+	@echo "================================"
+	@echo "Make down_squid"
+	docker compose \
+		--file build/containers/squid/docker-compose-squid.yml \
+		down
+
 #--------------------------
 # nix build athens docker container
 
@@ -296,6 +324,13 @@ bazel_build_a_tarball:
 	bazel build //cmd/go_nix_simple:image_bazel_distroless_noupx_tarball
 
 bazel_go:
-	bazel build //cmd/go_nix_simple:image_bazel_distroless_noupx
+	bazel build //cmd/go_nix_simple:go_nix_simple_binary_noupx
+	#bazel build //cmd/go_nix_simple:image_bazel_distroless_noupx
+
+bazel_build_remote:
+	bazel build --config=hp4 //cmd/go_nix_simple:go_nix_simple_binary_noupx
+
+bazel_clean:
+	bazel clean --expunge
 
 # end

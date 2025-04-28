@@ -39,8 +39,10 @@ func main() {
 	tmplPath := flag.String("template", "build/containers/go_nix_simple_refactor/Containerfile.tmpl", "Path to the Containerfile template")
 	outputPath := flag.String("output", "build/containers/go_nix_simple_refactor", "Directory to save generated Containerfiles")
 
-	athensURL := flag.String("athens-url", "http://hp4.home:8888", "Athens proxy URL")
-	httpProxyURL := flag.String("http-proxy-url", "http://hp4.home:3128", "HTTP proxy URL")
+	athensURL := flag.String("athens-url", "http://localhost:8888", "Athens proxy URL")
+	httpProxyURL := flag.String("http-proxy-url", "http://localhost:3128", "HTTP proxy URL")
+	// athensURL := flag.String("athens-url", "http://hp4.home:8888", "Athens proxy URL")
+	// httpProxyURL := flag.String("http-proxy-url", "http://hp4.home:3128", "HTTP proxy URL")
 
 	goVersion := flag.String("go-version", "1.24.2", "Go version for builder image")
 	// Add flags for MYPATH, COMMIT, DATE, VERSION if they need to be passed to the template

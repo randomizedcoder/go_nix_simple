@@ -1,0 +1,9 @@
+#
+# ./build/containers/squid/Containerfile
+#
+
+FROM sameersbn/squid:latest
+
+COPY squid.conf /etc/squid/squid.conf
+
+# end

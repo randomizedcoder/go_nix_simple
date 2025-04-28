@@ -75,7 +75,7 @@ func main() {
 
 	log.SetOutput(io.Discard)
 
-	imageTagsRaw := flag.String("images", "", "Comma-separated list of Docker image tags to validate (required)")
+	imageTagsRaw := flag.String("images", "all", "Comma-separated list of Docker image tags to validate (required)")
 	parallelism := flag.Int("parallel", defaultParallelism, "Number of concurrent validation tests to run")
 	timeout := flag.Duration("timeout", defaultTimeout, "Timeout for each individual image validation")
 	logTarget := flag.String("log-target", defaultLogTarget, "Log line prefix to wait for")
