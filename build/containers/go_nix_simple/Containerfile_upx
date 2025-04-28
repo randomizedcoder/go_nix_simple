@@ -49,8 +49,29 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 # https://github.com/docker-archive/compose-cli/blob/main/Dockerfile#L31
 
+#--------------------
+# COMPRESS
+# https://hub.docker.com/_/debian/tags
+FROM debian:bullseye-slim AS compress
+RUN --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt/lists \
+    apt-get update && \
+    apt-get install -y --no-install-recommends upx-ucl
+COPY --from=build /go/bin/go_nix_simple /go_nix_simple
+#RUN ls -lh /go_nix_simple
+RUN upx --best --lzma /go_nix_simple
+#RUN ls -lh /go_nix_simple
+
+# WARNING!! Don't do this!!  Nix store is empty!
+# #--------------------
+# # COMPRESS Nix
+# FROM nixos/nix:latest AS compress
+# COPY --from=build /go/bin/go_nix_simple /go_nix_simple
+# RUN --mount=type=cache,target=/nix/store \
+#     nix-shell -p upx --run "upx --best --lzma /go_nix_simple"
+
 FROM scratch AS arrange
-COPY --from=build --chmod=544 /go/bin/go_nix_simple /
+COPY --from=compress --chmod=544 /go_nix_simple /
 COPY --from=build --chmod=444 /go/src/VERSION /
 
 # https://github.com/GoogleContainerTools/distroless?tab=readme-ov-file#what-images-are-available

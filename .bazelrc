@@ -1,0 +1,14 @@
+# Configuration for using Buildbarn on hp4.home
+# Use 'build:hp4' to apply these flags to the build command when --config=hp4 is used
+build:hp4 --remote_executor=grpc://hp4.home:8980
+build:hp4 --remote_cache=grpc://hp4.home:8980
+
+# Optional: Download all remote outputs (useful for debugging)
+# build:hp4 --remote_download_outputs=all
+
+# Optional: Prevent uploading local results if remote execution fails (saves bandwidth)
+# build:hp4 --remote_upload_local_results=false
+
+# Optional: Set concurrency (adjust based on hp4's resources)
+# build:hp4 --jobs=16
+# build:hp4 --remote_local_fallback=false # Often recommended for pure remote execution

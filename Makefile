@@ -2,123 +2,210 @@
 # /go-nix-simple/Makefile
 #
 
-VERSION := $(shell cat VERSION)
-LOCAL_MAJOR_VERSION := $(word 1,$(subst ., ,$(VERSION)))
-LOCAL_MINOR_VERSION := $(word 2,$(subst ., ,$(VERSION)))
-LOCAL_PATCH_VERSION := $(word 3,$(subst ., ,$(VERSION)))
 SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-MYPATH = $(shell pwd)
+# --- Build Information ---
+VERSION := $(shell cat VERSION)
 COMMIT := $(shell git describe --always)
 DATE := $(shell date -u +"%Y-%m-%d-%H:%M")
+LDFLAGS_STR := "-X main.commit=${COMMIT} -X main.date=${DATE} -X main.version=${VERSION}"
 
+# --- Helper Variables ---
 TIMESTAMP := date +"%Y-%m-%d %H:%M:%S.%3N"
+MYPATH = $(shell pwd)
+REPO_PREFIX := randomizedcoder
 
-# Fake targets
-.PHONY: all nix_build_go-nix-simple nix_build_docker nix_build_docker_trace nix_build_docker_load gomod2nix nix_build_docker_gomod2nix nix_build_docker_gomod2nix_load builddocker_go-nix-simple-distroless builddocker_go-nix-simple-distroless-athens deploy_athens down_athens athens_traffic nix_build_athens run_athens ls dive dive-distroless run run-distroless curl prepare clear_go_mod_cache go_glean flake_metadata flake_show
+# --- Output Directory for Metrics ---
+BUILD_RUN_TIMESTAMP := $(shell date +"%Y%m%d_%H%M%S")
+BUILD_OUTPUT_DIR := ./output/$(BUILD_RUN_TIMESTAMP)
 
-all: nix_build_docker nix_build_docker_load builddocker_go-nix-simple-distroless builddocker_go-nix-simple-distroless-athens gomod2nix ls
+VALIDATION_OUTPUT_DIR := $(BUILD_OUTPUT_DIR)/validation
+
+# --- Generator Tool ---
+GENERATOR_DIR := cmd/generate-containerfiles
+GENERATOR_BIN := $(GENERATOR_DIR)/generate-containerfiles
+CONTAINERFILE_DIR := build/containers/go_nix_simple_refactor
+
+# --- Validator Tool ---
+VALIDATOR_DIR := cmd/validate-image
+VALIDATOR_BIN := $(VALIDATOR_DIR)/validate-image
+
+# --- Build Command Macro (Used for Nix builds now) ---
+define time_command
+@_start_time_ns=$$(date +%s%N); \
+echo "[$($(TIMESTAMP))] Starting $(1)..."; \
+$(2); \
+_end_time_ns=$$(date +%s%N); \
+_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
+echo "[$($(TIMESTAMP))] Finished $(1). Duration: $$_duration_ms ms."
+endef
+
+# --- Nix Flake Outputs (Base names for easier reference) ---
+NIX_IMAGE_PREFIX := image-nix
+NIX_BINARY_PREFIX := binary-nix
+NIX_BUILDERS := buildgomodule gomod2nix
+NIX_BASES := distroless scratch
+NIX_PACKERS := noupx upx
+
+# --- Docker Build Variants (Base names for easier reference) ---
+DOCKER_BUILD_PREFIX := build_docker
+DOCKER_IMAGE_PREFIX := docker-go-nix-simple
+DOCKER_BASES := distroless scratch
+DOCKER_CACHES := docker athens http none
+DOCKER_PACKERS := noupx upx
+
+# --- Generate Lists of Targets ---
+NIX_IMAGE_TARGETS := $(foreach base,$(NIX_BASES), \
+                       $(foreach builder,$(NIX_BUILDERS), \
+                         $(foreach packer,$(NIX_PACKERS), \
+                           build-$(NIX_IMAGE_PREFIX)-$(base)-$(builder)-$(packer))))
+
+DOCKER_IMAGE_TARGETS := $(foreach base,$(DOCKER_BASES), \
+                          $(foreach cache,$(DOCKER_CACHES), \
+                            $(foreach packer,$(DOCKER_PACKERS), \
+                              $(DOCKER_BUILD_PREFIX)-$(base)-$(cache)-$(packer))))
+
+# No filters yet
+INVALID_DOCKER_COMBOS := $(filter %-foo-bar, $(DOCKER_IMAGE_TARGETS))
+# INVALID_DOCKER_COMBOS := $(filter %-athens-upx, $(DOCKER_IMAGE_TARGETS)) \
+#                          $(filter %-http-upx, $(DOCKER_IMAGE_TARGETS)) \
+#                          $(filter %-none-upx, $(DOCKER_IMAGE_TARGETS)) \
+#                          $(filter %-scratch-athens-upx, $(DOCKER_IMAGE_TARGETS))
+
+VALID_DOCKER_IMAGE_TARGETS := $(filter-out $(INVALID_DOCKER_COMBOS), $(DOCKER_IMAGE_TARGETS))
+
+# --- Generate Lists of Validation Targets ---
+VALIDATE_NIX_TARGETS := $(NIX_IMAGE_TARGETS:build-%=validate-%)
+
+VALIDATE_DOCKER_TARGETS := $(VALID_DOCKER_IMAGE_TARGETS:$(DOCKER_BUILD_PREFIX)-%=validate_docker-%)
+ALL_VALIDATE_TARGETS := $(VALIDATE_NIX_TARGETS) $(VALIDATE_DOCKER_TARGETS)
+
+
+# --- Phony Targets ---
+.PHONY: all all-nix all-docker \
+	prepare-output-dir generate-containerfiles \
+	build-validator \
+	validate-all validate-all-nix validate-all-docker \
+	load-nix-result \
+	summary \
+	$(NIX_IMAGE_TARGETS) \
+	$(VALID_DOCKER_IMAGE_TARGETS) \
+	$(ALL_VALIDATE_TARGETS) \
+	deploy_athens down_athens run_athens ls dive run curl prepare clear_go_mod_cache go_clean \
+	flake_metadata flake_show \
+	install_bazel gazelle_init gazelle_run bazel_build bazel_run \
+	bazel_build_a_tarball bazel_go
+
+# --- Aggregate Targets ---
+all: prepare-output-dir all-nix all-docker summary
+all-validate: prepare-output-dir all-nix all-docker validate-all summary validation-summary
+all-nix: prepare-output-dir $(NIX_IMAGE_TARGETS)
+all-docker: prepare-output-dir generate-containerfiles $(VALID_DOCKER_IMAGE_TARGETS)
+
+validate-all: $(ALL_VALIDATE_TARGETS)
+validate-all-nix: $(VALIDATE_NIX_TARGETS)
+validate-all-docker: $(VALIDATE_DOCKER_TARGETS)
+
+# e.g. make validate-all -j1
+
+# --- Prepare Output Directory ---
+prepare-output-dir:
+	@mkdir -p $(BUILD_OUTPUT_DIR)
+	@echo "Build output directory: $(BUILD_OUTPUT_DIR)"
 
 #--------------------------
-# nix build
-
-nix_build_go-nix-simple:
-	@_start_time_ns=$$(date +%s%N); \
-	echo "[$($(TIMESTAMP))] Starting $@..."; \
-	nix build .#go-nix-simple; \
-	_end_time_ns=$$(date +%s%N); \
-	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
-	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
-
-nix_build_docker:
-	@_start_time_ns=$$(date +%s%N); \
-	echo "[$($(TIMESTAMP))] Starting $@..."; \
-	nix build .; \
-	_end_time_ns=$$(date +%s%N); \
-	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
-	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
-
-nix_build_docker_trace:
-	@_start_time_ns=$$(date +%s%N); \
-	echo "[$($(TIMESTAMP))] Starting $@..."; \
-	nix build . --show-trace; \
-	_end_time_ns=$$(date +%s%N); \
-	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
-	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
-
-nix_build_docker_load:
-	@_start_time_ns=$$(date +%s%N); \
-	echo "[$($(TIMESTAMP))] Starting $@..."; \
-	docker load < result; \
-	_end_time_ns=$$(date +%s%N); \
-	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
-	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
-
-#---------
-# gomod2nix
-gomod2nix: nix_build_docker_gomod2nix nix_build_docker_gomod2nix_load
-
-nix_build_docker_gomod2nix:
-	@_start_time_ns=$$(date +%s%N); \
-	echo "[$($(TIMESTAMP))] Starting $@..."; \
-	nix build .#docker-image-gomod2nix; \
-	_end_time_ns=$$(date +%s%N); \
-	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
-	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
-
-nix_build_docker_gomod2nix_load:
-	@_start_time_ns=$$(date +%s%N); \
-	echo "[$($(TIMESTAMP))] Starting $@..."; \
-	docker load < result; \
-	_end_time_ns=$$(date +%s%N); \
-	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
-	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+# Containerfile Generation
+generate-containerfiles:
+	@echo "[$($(TIMESTAMP))] Building Containerfile generator..."
+	@$(MAKE) -C $(GENERATOR_DIR) build
+	@echo "[$($(TIMESTAMP))] Running Containerfile generator..."
+	$(call time_command, $@, $(GENERATOR_BIN) --output $(CONTAINERFILE_DIR))
 
 #--------------------------
-# docker build
+# Validator Build Target
+build-validator:
+	@echo "[$($(TIMESTAMP))] Building validator tool..."
+	@$(MAKE) -C $(VALIDATOR_DIR) build
+	@echo "[$($(TIMESTAMP))] Finished building validator tool."
 
-builddocker_go-nix-simple-distroless:
-	@_start_time_ns=$$(date +%s%N); \
-	echo "[$($(TIMESTAMP))] Starting $@..."; \
-	echo "================================"; \
-	echo "Make builddocker_go_nix_simple randomizedcoder/go-nix-simple-distroless:${VERSION}"; \
-	docker build \
-		--network=host \
-		--build-arg MYPATH=${MYPATH} \
-		--build-arg COMMIT=${COMMIT} \
-		--build-arg DATE=${DATE} \
-		--build-arg VERSION=${VERSION} \
-		--file build/containers/go_nix_simple/Containerfile \
-		--tag randomizedcoder/go-nix-simple-distroless:${VERSION} --tag randomizedcoder/go-nix-simple-distroless:latest \
-		${MYPATH}; \
-	_end_time_ns=$$(date +%s%N); \
-	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
-	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+run-valdiator:
+	./cmd/validate-image/validate-image --parallel 8
 
-builddocker_go-nix-simple-distroless-athens:
-	@_start_time_ns=$$(date +%s%N); \
-	echo "[$($(TIMESTAMP))] Starting $@..."; \
-	echo "================================"; \
-	echo "Make builddocker_go_nix_simple randomizedcoder/go-nix-simple-distroless-athens:${VERSION}"; \
-	docker build \
-		--network=host \
-		--build-arg MYPATH=${MYPATH} \
-		--build-arg COMMIT=${COMMIT} \
-		--build-arg DATE=${DATE} \
-		--build-arg VERSION=${VERSION} \
-		--file build/containers/go_nix_simple/Containerfile_athens \
-		--tag randomizedcoder/go-nix-simple-distroless-athens:${VERSION} --tag randomizedcoder/go-nix-simple-distroless-athens:latest \
-		${MYPATH}; \
-	_end_time_ns=$$(date +%s%N); \
-	_duration_ms=$$(( (_end_time_ns - _start_time_ns) / 1000000 )); \
-	echo "[$($(TIMESTAMP))] Finished $@. Duration: $$_duration_ms ms."
+#--------------------------
+# Nix Build Targets
+
+$(NIX_IMAGE_TARGETS): build-$(NIX_IMAGE_PREFIX)-% : prepare-output-dir
+	./scripts/build_nix_image.sh \
+		"$(strip $@)" \
+		"$(strip $(NIX_IMAGE_PREFIX)-$(*))" \
+		"$(strip $(REPO_PREFIX)/$(subst image-nix-,nix-go-nix-simple-,$(NIX_IMAGE_PREFIX)-$(*)):$(VERSION))" \
+		"$(strip $(BUILD_OUTPUT_DIR))"
+
+
+load-nix-result: result
+	$(call time_command, $@, docker load < result)
+
+#--------------------------
+# Docker Build Targets
+
+$(VALID_DOCKER_IMAGE_TARGETS): $(DOCKER_BUILD_PREFIX)-% : prepare-output-dir
+	./scripts/build_docker_image.sh \
+		"$(strip $(word 1,$(subst -, ,$(patsubst $(DOCKER_BUILD_PREFIX)-%,%,$@))))" \
+		"$(strip $(word 2,$(subst -, ,$(patsubst $(DOCKER_BUILD_PREFIX)-%,%,$@))))" \
+		"$(strip $(word 3,$(subst -, ,$(patsubst $(DOCKER_BUILD_PREFIX)-%,%,$@))))" \
+		"$(strip $(VERSION))" \
+		"$(strip $(COMMIT))" \
+		"$(strip $(DATE))" \
+		"$(strip $(REPO_PREFIX))" \
+		"$(strip $(DOCKER_IMAGE_PREFIX))" \
+		"$(strip $(CONTAINERFILE_DIR))" \
+		"$(strip $(MYPATH))" \
+		"$(strip $(BUILD_OUTPUT_DIR))"
+
+#--------------------------
+# Validation Targets
+
+# Generic rule for validating Nix images (Calls script)
+$(VALIDATE_NIX_TARGETS): validate-$(NIX_IMAGE_PREFIX)-% : build-$(NIX_IMAGE_PREFIX)-% build-validator
+	@mkdir -p $(VALIDATION_OUTPUT_DIR) # Create validation dir
+	$(eval IMAGE_TAG_TO_VALIDATE := $(strip $(REPO_PREFIX)/$(subst image-nix-,nix-go-nix-simple-,$(NIX_IMAGE_PREFIX)-$(*)):$(VERSION)))
+	./scripts/validate_image.sh "$@" "$(VALIDATOR_BIN)" "$(IMAGE_TAG_TO_VALIDATE)" "30" "$(VALIDATION_OUTPUT_DIR)"
+
+# Generic rule for validating Docker images (Calls script)
+$(VALIDATE_DOCKER_TARGETS) : validate_docker-% : $(DOCKER_BUILD_PREFIX)-% build-validator
+	@mkdir -p $(VALIDATION_OUTPUT_DIR) # Create validation dir
+	@echo "[$($(TIMESTAMP))] Validating Docker image $(subst validate_docker-,build_docker-, $@)..."
+	# Use $(*) for the stem
+	$(eval STEM := $(*))
+	$(eval IMAGE_TAG_TO_VALIDATE := $(strip $(REPO_PREFIX)/$(subst $(DOCKER_BUILD_PREFIX)-,$(DOCKER_IMAGE_PREFIX)-,$(DOCKER_BUILD_PREFIX)-$(STEM)):$(VERSION)))
+	./scripts/validate_image.sh "$@" "$(VALIDATOR_BIN)" "$(IMAGE_TAG_TO_VALIDATE)" "30" "$(VALIDATION_OUTPUT_DIR)"
+
+#--------------------------
+# Summary Target
+
+ALL_NIX_IMAGE_TAGS := $(foreach target,$(NIX_IMAGE_TARGETS),$(REPO_PREFIX)/$(subst build-,,$(target)):$(VERSION))
+ALL_DOCKER_IMAGE_TAGS := $(foreach target,$(VALID_DOCKER_IMAGE_TARGETS),$(REPO_PREFIX)/$(subst $(DOCKER_BUILD_PREFIX)-,$(DOCKER_IMAGE_PREFIX)-,$(target)):$(VERSION))
+ALL_IMAGE_TAGS := $(ALL_NIX_IMAGE_TAGS) $(ALL_DOCKER_IMAGE_TAGS)
+
+summary:
+	./scripts/generate_summary.sh
+
+validation-summary:
+	./scripts/generate_validation_summary.sh
+
+#--------------------------
+# Other Utility Targets (Keep relevant ones)
+
+ls:
+	@echo "--- Nix Images (Loaded) ---"
+	@docker image ls '$(REPO_PREFIX)/nix-go-nix-simple*' || true
+	@echo "--- Docker Images ---"
+	@docker image ls '$(REPO_PREFIX)/docker-go-nix-simple*' || true
 
 #--------------------------
 # docker compose athens
 
-# https://docs.docker.com/engine/reference/commandline/docker/
-# https://docs.docker.com/compose/reference/
 deploy_athens:
 	@echo "================================"
 	@echo "Make deploy_athens"
@@ -136,6 +223,31 @@ down_athens:
 athens_traffic:
 	sudo tcpdump -ni any port 8888
 
+
+#--------------------------
+# docker compose squid
+
+squid: create_squid deploy_squid
+
+create_squid:
+	docker build -t my-custom-squid:latest \
+		-f ./build/containers/squid/Containerfile \
+		./build/containers/squid/
+
+deploy_squid:
+	@echo "================================"
+	@echo "Make deploy_squid"
+	docker compose \
+		--file build/containers/squid/docker-compose-squid.yml \
+		up -d --remove-orphans
+
+down_squid:
+	@echo "================================"
+	@echo "Make down_squid"
+	docker compose \
+		--file build/containers/squid/docker-compose-squid.yml \
+		down
+
 #--------------------------
 # nix build athens docker container
 
@@ -147,34 +259,25 @@ run_athens:
 	docker run -d -p 8888:8888 randomizedcoder/athens-nix:latest
 
 #--------------------------
-# inspect
+# inspect (Update these if needed)
 
-ls:
-	docker image ls randomizedcoder/go-nix-simple;
-	docker image ls randomizedcoder/go-nix-simple-distroless;
-	docker image ls randomizedcoder/go-nix-simple-distroless-athens;
-	docker image ls randomizedcoder/go-nix-simple-gomod2nix;
+# dive:
+# 	dive <some_new_image_tag>
 
-dive:
-	dive randomizedcoder/go-nix-simple:latest
+# dive-distroless:
+# 	dive <some_new_distroless_tag>
 
-dive-distroless:
-	dive randomizedcoder/go-nix-simple-distroless:latest
+# run:
+# 	docker run -d -p 9108:9108 <some_new_image_tag>
 
-run:
-	docker run -d -p 9108:9108 randomizedcoder/go-nix-simple:latest
-
-run-distroless:
-	docker run -d -p 9108:9108 randomizedcoder/go-nix-simple-distroless:latest
+# run-distroless:
+# 	docker run -d -p 9108:9108 <some_new_distroless_tag>
 
 curl:
 	curl http://localhost:9108/metrics
 
-# https://ryantm.github.io/nixpkgs/builders/images/dockertools/#ssec-pkgs-dockerTools-fetchFromRegistry
-# https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/docker/nix-prefetch-docker
 prepare:
-	nix-shell -p nix-prefetch-docker
-	nix-prefetch-docker --image-name gcr.io/distroless/static-debian12 --image-tag latest
+	nix-shell -p nix-prefetch-docker --run "nix-prefetch-docker --image-name gcr.io/distroless/static-debian12 --image-tag latest"
 
 #--------------------------
 # clear go mod cache
@@ -182,7 +285,7 @@ prepare:
 clear_go_mod_cache:
 	sudo rm -rf /home/das/go/pkg/mod/
 
-go_glean:
+go_clean:
 	go clean -modcache
 
 #--------------------------
@@ -193,5 +296,41 @@ flake_metadata:
 
 flake_show:
 	nix flake show
+
+flake_update:
+	nix flake update
+
+flake_develop:
+	nix develop
+
+#------------------------
+# bazel
+install_bazel:
+	go install github.com/bazelbuild/bazel-gazelle/cmd/gazelle@latest
+
+gazelle_update:
+	bazel run //:gazelle -- update-repos -from_file=go.mod
+
+gazelle_run:
+	bazel run //:gazelle
+
+bazel_build:
+	bazel build //cmd/go_nix_simple:go_nix_simple
+
+bazel_run:
+	bazel run //cmd/go_nix_simple:go_nix_simple
+
+bazel_build_a_tarball:
+	bazel build //cmd/go_nix_simple:image_bazel_distroless_noupx_tarball
+
+bazel_go:
+	bazel build //cmd/go_nix_simple:go_nix_simple_binary_noupx
+	#bazel build //cmd/go_nix_simple:image_bazel_distroless_noupx
+
+bazel_build_remote:
+	bazel build --config=hp4 //cmd/go_nix_simple:go_nix_simple_binary_noupx
+
+bazel_clean:
+	bazel clean --expunge
 
 # end

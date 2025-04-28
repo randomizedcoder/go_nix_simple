@@ -1,0 +1,8 @@
+services:
+  squid:
+    image: my-custom-squid:latest
+    #image: sameersbn/squid:latest
+    container_name: squid
+    ports:
+      - "3128:3128"
+    restart: unless-stopped

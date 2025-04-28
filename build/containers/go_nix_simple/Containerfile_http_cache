@@ -32,8 +32,10 @@ RUN echo MYPATH:${MYPATH} COMMIT:${COMMIT} DATE:${DATE} VERSION:${VERSION} \
 WORKDIR /go/src
 COPY . .
 
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
+# RUN --mount=type=cache,target=/go/pkg/mod \
+#     --mount=type=cache,target=/root/.cache/go-build \
+RUN HTTP_PROXY=http://hp4.home:3128 \
+    HTTPs_PROXY=http://hp4.home:3128 \
     CGO_ENABLED=0 go build \
     -trimpath \
     -tags=netgo,osusergo \
@@ -56,9 +58,9 @@ COPY --from=build --chmod=444 /go/src/VERSION /
 # https://github.com/GoogleContainerTools/distroless?tab=readme-ov-file#what-images-are-available
 # https://github.com/GoogleContainerTools/distroless?tab=readme-ov-file#debug-images
 #FROM gcr.io/distroless/static-debian12:nonroot
-FROM gcr.io/distroless/static-debian12
+#FROM gcr.io/distroless/static-debian12
 #FROM gcr.io/distroless/static-debian12:debug
-#FROM scratch
+FROM scratch
 
 # becomes a single layer
 COPY --from=arrange / /

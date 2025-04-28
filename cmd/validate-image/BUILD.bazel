@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "validate-image_lib",
+    srcs = ["validate-image.go"],
+    importpath = "github.com/randomizedcoder/go_nix_simple/cmd/validate-image",
+    visibility = ["//visibility:private"],
+    deps = [
+        "@com_github_docker_docker//api/types/container",
+        "@com_github_docker_docker//api/types/image",
+        "@com_github_docker_docker//client",
+        "@com_github_docker_go_connections//nat",
+        "@com_github_prometheus_common//expfmt",
+        "@com_github_prometheus_common//model",
+    ],
+)
+
+go_binary(
+    name = "validate-image",
+    embed = [":validate-image_lib"],
+    visibility = ["//visibility:public"],
+)
