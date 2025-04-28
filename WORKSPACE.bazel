@@ -456,28 +456,28 @@ go_repository(
 go_repository(
     name = "com_github_prometheus_client_golang",
     importpath = "github.com/prometheus/client_golang",
-    sum = "h1:rb93p9lokFEsctTys46VnV1kLCDpVZ0a/Y92Vm0Zc6Q=",
+    sum = "h1:rb93p9lokFEsctTys46VnV1kLCDpVZ0a/Y92Vm0Zc6Q=", # Sum for v1.22.0
     version = "v1.22.0",
-    # sum = "h1:rb93p9lokFEsctTys46VnV1kLCDpVZ0a/Y92Vm0Zc6Q=",
-    # version = "v1.22.0",
+    # Add Gazelle arguments to exclude the Cgo-related files
+    # This might prevent Gazelle from setting cgo = True for the library
+    build_extra_args = [
+        "-exclude=prometheus/process_collector_mem_cgo_darwin.go",
+        "-exclude=prometheus/process_collector_mem_cgo_darwin.c",
+    ],
 )
 
 go_repository(
     name = "com_github_prometheus_client_model",
     importpath = "github.com/prometheus/client_model",
-    #sum = "h1:q5b0k9sP0D/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTY=",
-    #version = "v0.6.2",
+    sum = "h1:oBsgwpGs7iVziMvrGhE53c/GrLUsZdHnqNwqPLxwZyk=",
+    version = "v0.6.2",
     # sum = "h1:ZKSh/rekM+n3CeS952MLRAdFwIKqeY8b62p8ais2e9E=",
     # version = "v0.6.1",
-    sum = "h1:ZKSh/rekM+n3CeS952MLRAdFwIKqeY8b62p8ais2e9E=",
-    version = "v0.6.1",
 )
 
 go_repository(
     name = "com_github_prometheus_common",
     importpath = "github.com/prometheus/common",
-    # sum = "h1:xasJaQlnWAeyHdUBeGjXmutelfJHWMRr+Fg4QszZ2Io=",
-    # version = "v0.62.0",
     sum = "h1:xasJaQlnWAeyHdUBeGjXmutelfJHWMRr+Fg4QszZ2Io=",
     version = "v0.62.0",
 )

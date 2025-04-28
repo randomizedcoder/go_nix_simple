@@ -75,11 +75,14 @@ INVALID_DOCKER_COMBOS := $(filter %-foo-bar, $(DOCKER_IMAGE_TARGETS))
 
 VALID_DOCKER_IMAGE_TARGETS := $(filter-out $(INVALID_DOCKER_COMBOS), $(DOCKER_IMAGE_TARGETS))
 
-# --- Generate Lists of Validation Targets ---
 VALIDATE_NIX_TARGETS := $(NIX_IMAGE_TARGETS:build-%=validate-%)
-
 VALIDATE_DOCKER_TARGETS := $(VALID_DOCKER_IMAGE_TARGETS:$(DOCKER_BUILD_PREFIX)-%=validate_docker-%)
 ALL_VALIDATE_TARGETS := $(VALIDATE_NIX_TARGETS) $(VALIDATE_DOCKER_TARGETS)
+
+PUSH_NIX_TARGETS := $(NIX_IMAGE_TARGETS:build-%=push-%)
+PUSH_DOCKER_TARGETS := $(VALID_DOCKER_IMAGE_TARGETS:$(DOCKER_BUILD_PREFIX)-%=push_docker-%)
+ALL_PUSH_TARGETS := $(PUSH_NIX_TARGETS) $(PUSH_DOCKER_TARGETS)
+
 
 
 # --- Phony Targets ---
@@ -92,6 +95,7 @@ ALL_VALIDATE_TARGETS := $(VALIDATE_NIX_TARGETS) $(VALIDATE_DOCKER_TARGETS)
 	$(NIX_IMAGE_TARGETS) \
 	$(VALID_DOCKER_IMAGE_TARGETS) \
 	$(ALL_VALIDATE_TARGETS) \
+	$(ALL_PUSH_TARGETS) \
 	deploy_athens down_athens run_athens ls dive run curl prepare clear_go_mod_cache go_clean \
 	flake_metadata flake_show \
 	install_bazel gazelle_init gazelle_run bazel_build bazel_run \
@@ -103,11 +107,23 @@ all-validate: prepare-output-dir all-nix all-docker validate-all summary validat
 all-nix: prepare-output-dir $(NIX_IMAGE_TARGETS)
 all-docker: prepare-output-dir generate-containerfiles $(VALID_DOCKER_IMAGE_TARGETS)
 
+# --- Add Aggregate Push Targets ---
+push-all: $(ALL_PUSH_TARGETS)
+	@echo "[$($(TIMESTAMP))] Finished pushing all images."
+
+push-all-nix: $(PUSH_NIX_TARGETS)
+	@echo "[$($(TIMESTAMP))] Finished pushing all Nix images."
+
+push-all-docker: $(PUSH_DOCKER_TARGETS)
+	@echo "[$($(TIMESTAMP))] Finished pushing all Docker images."
+
 validate-all: $(ALL_VALIDATE_TARGETS)
 validate-all-nix: $(VALIDATE_NIX_TARGETS)
 validate-all-docker: $(VALIDATE_DOCKER_TARGETS)
 
 # e.g. make validate-all -j1
+
+
 
 # --- Prepare Output Directory ---
 prepare-output-dir:
@@ -162,6 +178,27 @@ $(VALID_DOCKER_IMAGE_TARGETS): $(DOCKER_BUILD_PREFIX)-% : prepare-output-dir
 		"$(strip $(CONTAINERFILE_DIR))" \
 		"$(strip $(MYPATH))" \
 		"$(strip $(BUILD_OUTPUT_DIR))"
+
+#--------------------------
+# Push Targets
+
+# Generic rule for pushing Nix images
+$(PUSH_NIX_TARGETS): push-$(NIX_IMAGE_PREFIX)-% : build-$(NIX_IMAGE_PREFIX)-%
+	@echo "[$($(TIMESTAMP))] Pushing Nix image $(subst push-,build-, $@)..."
+	$(eval IMAGE_TAG_TO_PUSH := $(strip $(REPO_PREFIX)/$(subst image-nix-,nix-go-nix-simple-,$(NIX_IMAGE_PREFIX)-$(*)):$(VERSION)))
+	docker push "$(IMAGE_TAG_TO_PUSH)"
+	# Optionally push :latest tag too
+	docker push "$(strip $(REPO_PREFIX)/$(subst image-nix-,nix-go-nix-simple-,$(NIX_IMAGE_PREFIX)-$(*)):latest)"
+
+# Generic rule for pushing Docker images
+$(PUSH_DOCKER_TARGETS) : push_docker-% : $(DOCKER_BUILD_PREFIX)-%
+	@echo "[$($(TIMESTAMP))] Pushing Docker image $(subst push_docker-,build_docker-, $@)..."
+	# Use $(*) for the stem
+	$(eval STEM := $(*))
+	$(eval IMAGE_TAG_TO_PUSH := $(strip $(REPO_PREFIX)/$(subst $(DOCKER_BUILD_PREFIX)-,$(DOCKER_IMAGE_PREFIX)-,$(DOCKER_BUILD_PREFIX)-$(STEM)):$(VERSION)))
+	docker push "$(IMAGE_TAG_TO_PUSH)"
+	# Optionally push :latest tag too
+	docker push "$(strip $(REPO_PREFIX)/$(subst $(DOCKER_BUILD_PREFIX)-,$(DOCKER_IMAGE_PREFIX)-,$(DOCKER_BUILD_PREFIX)-$(STEM)):latest)"
 
 #--------------------------
 # Validation Targets
@@ -315,7 +352,10 @@ gazelle_run:
 	bazel run //:gazelle
 
 bazel_build:
-	bazel build //cmd/go_nix_simple:go_nix_simple
+	bazel build --verbose_failures //cmd/go_nix_simple:go_nix_simple_binary_noupx
+
+# bazel_build:
+# 	bazel build //cmd/go_nix_simple:go_nix_simple
 
 bazel_run:
 	bazel run //cmd/go_nix_simple:go_nix_simple
