@@ -83,10 +83,14 @@ PUSH_NIX_TARGETS := $(NIX_IMAGE_TARGETS:build-%=push-%)
 PUSH_DOCKER_TARGETS := $(VALID_DOCKER_IMAGE_TARGETS:$(DOCKER_BUILD_PREFIX)-%=push_docker-%)
 ALL_PUSH_TARGETS := $(PUSH_NIX_TARGETS) $(PUSH_DOCKER_TARGETS)
 
-
+BAZEL_TARGETS := \
+	image_bazel_distroless_noupx \
+	image_bazel_distroless_upx \
+	image_bazel_scratch_noupx \
+	image_bazel_scratch_upx
 
 # --- Phony Targets ---
-.PHONY: all all-nix all-docker \
+.PHONY: all all-nix all-docker all-bazel \
 	prepare-output-dir generate-containerfiles \
 	build-validator \
 	validate-all validate-all-nix validate-all-docker \
@@ -94,6 +98,7 @@ ALL_PUSH_TARGETS := $(PUSH_NIX_TARGETS) $(PUSH_DOCKER_TARGETS)
 	summary \
 	$(NIX_IMAGE_TARGETS) \
 	$(VALID_DOCKER_IMAGE_TARGETS) \
+	$(BAZEL_TARGETS) \
 	$(ALL_VALIDATE_TARGETS) \
 	$(ALL_PUSH_TARGETS) \
 	deploy_athens down_athens run_athens ls dive run curl prepare clear_go_mod_cache go_clean \
@@ -106,6 +111,45 @@ all: prepare-output-dir all-nix all-docker summary
 all-validate: prepare-output-dir all-nix all-docker validate-all summary validation-summary
 all-nix: prepare-output-dir $(NIX_IMAGE_TARGETS)
 all-docker: prepare-output-dir generate-containerfiles $(VALID_DOCKER_IMAGE_TARGETS)
+
+# --- Aggregate Bazel Targets ---
+all-bazel:
+	@echo "================================"
+	@echo "Make all-bazel"
+	@for target in image_bazel_distroless_noupx image_bazel_distroless_upx image_bazel_scratch_noupx image_bazel_scratch_upx; do \
+		echo "Building $$target"; \
+		bazel build //cmd/go_nix_simple:$${target}_tarball \
+			--define REPO_PREFIX=docker.io/randomizedcoder \
+			--define VERSION=latest || exit 1; \
+		docker load < bazel-bin/cmd/go_nix_simple/$${target}_tarball/tarball.tar || exit 1; \
+	done
+	@echo "================================"
+	@echo "Make all-bazel complete"
+
+# Individual bazel targets
+image_bazel_distroless_noupx:
+	bazel build //cmd/go_nix_simple:image_bazel_distroless_noupx_tarball \
+		--define REPO_PREFIX=docker.io/randomizedcoder \
+		--define VERSION=latest
+	docker load < bazel-bin/cmd/go_nix_simple/image_bazel_distroless_noupx_tarball/tarball.tar
+
+image_bazel_distroless_upx:
+	bazel build //cmd/go_nix_simple:image_bazel_distroless_upx_tarball \
+		--define REPO_PREFIX=docker.io/randomizedcoder \
+		--define VERSION=latest
+	docker load < bazel-bin/cmd/go_nix_simple/image_bazel_distroless_upx_tarball/tarball.tar
+
+image_bazel_scratch_noupx:
+	bazel build //cmd/go_nix_simple:image_bazel_scratch_noupx_tarball \
+		--define REPO_PREFIX=docker.io/randomizedcoder \
+		--define VERSION=latest
+	docker load < bazel-bin/cmd/go_nix_simple/image_bazel_scratch_noupx_tarball/tarball.tar
+
+image_bazel_scratch_upx:
+	bazel build //cmd/go_nix_simple:image_bazel_scratch_upx_tarball \
+		--define REPO_PREFIX=docker.io/randomizedcoder \
+		--define VERSION=latest
+	docker load < bazel-bin/cmd/go_nix_simple/image_bazel_scratch_upx_tarball/tarball.tar
 
 # --- Add Aggregate Push Targets ---
 push-all: $(ALL_PUSH_TARGETS)

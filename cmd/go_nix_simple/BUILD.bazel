@@ -1,5 +1,8 @@
 # Load necessary rules
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_oci//oci:defs.bzl", "oci_image")
+#load("@rules_oci//oci:defs.bzl", "oci_image", "oci_tarball")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
 
 # Define the Go library for the application code
 go_library(
@@ -19,11 +22,35 @@ go_library(
     ],
 )
 
-# Define the Go binary target
+# https://github.com/bazel-contrib/rules_oci/blob/main/docs/go.md?plain=1
+
+# Build binary
 go_binary(
     name = "go_nix_simple",
     embed = [":go_nix_simple_lib"],
     pure = "on",
     static = "on",
     visibility = ["//visibility:public"],
+)
+
+# Package binary
+pkg_tar(
+    name = "go_nix_simple_layer",
+    srcs = [":go_nix_simple"],
+)
+
+# Scratch image
+oci_image(
+    name = "image_bazel_scratch",
+    base = "@rules_oci//oci/bases/scratch:scratch",
+    tars = [":go_nix_simple_layer"],
+    entrypoint = ["/go_nix_simple"],
+)
+
+# Distroless image
+oci_image(
+    name = "image_bazel_distroless",
+    base = "@distroless_static",
+    tars = [":go_nix_simple_layer"],
+    entrypoint = ["/go_nix_simple"],
 )

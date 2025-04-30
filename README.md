@@ -75,11 +75,11 @@ make
 make run-valdiator
 ```
 
-# Combinations and Permutation
+# Combinations and Permutations
 
 - Builder: Nix-buildGoModule, Nix-buildGoApplication, Docker-build, Bazel-build, Bazel-build-nix
 - Final base container: Distroless, Scratch
-- Caching: Docker, Athens, Nix, HTTP-cache, No-cache
+- Caching: Docker, Athens, Nix, HTTP-cache, No-cache, Bazel
 - Executable packer: UPX, none
 
 ## Performance tips
