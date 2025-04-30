@@ -39,18 +39,30 @@ pkg_tar(
     srcs = [":go_nix_simple"],
 )
 
-# Scratch image
+pkg_tar(
+    name = "empty_layer",
+    srcs = [],
+)
+
 oci_image(
-    name = "image_bazel_scratch",
-    base = "@rules_oci//oci/bases/scratch:scratch",
-    tars = [":go_nix_simple_layer"],
-    entrypoint = ["/go_nix_simple"],
+    name = "empty_base",
+    tars = [":empty_layer"],
+    os = "linux",
+    architecture = "amd64",
 )
 
 # Distroless image
 oci_image(
     name = "image_bazel_distroless",
     base = "@distroless_static",
+    tars = [":go_nix_simple_layer"],
+    entrypoint = ["/go_nix_simple"],
+)
+
+# Scratch image
+oci_image(
+    name = "image_bazel_scratch",
+    base = ":empty_base",
     tars = [":go_nix_simple_layer"],
     entrypoint = ["/go_nix_simple"],
 )
