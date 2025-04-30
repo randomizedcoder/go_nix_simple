@@ -370,6 +370,16 @@ bazel_go:
 bazel_build_remote:
 	bazel build --config=hp4 //cmd/go_nix_simple:go_nix_simple_binary_noupx
 
+bazel_build_distroless:
+	bazel build //cmd/go_nix_simple:image_bazel_distroless_noupx_tarball \
+		--define REPO_PREFIX=docker.io/randomizedcoder \
+		--define VERSION=latest
+
+bazel_build_scratch:
+	bazel build //cmd/go_nix_simple:image_bazel_scratch_upx_tarball \
+		--define REPO_PREFIX=docker.io/randomizedcoder \
+		--define VERSION=latest
+
 bazel_clean:
 	bazel clean --expunge
 
