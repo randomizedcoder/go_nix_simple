@@ -1,15 +1,23 @@
-# go_nix_simple/BUILD.bazel
-
-# gazelle:prefix github.com/randomizedcoder/go_nix_simple
-# gazelle:map_kind go_repository go_repository //:deps.bzl%go_repository
-# gazelle:repository_macro deps.bzl%go_dependencies
-
-load("@bazel_gazelle//:def.bzl", "gazelle")
+load("@gazelle//:def.bzl", "gazelle")
 
 # Gazelle configuration
 gazelle(
     name = "gazelle",
-    prefix = "github.com/randomizedcoder/go_nix_simple",  # Your Go module path
+    args = [
+        "-build_file_name=BUILD.bazel",
+        "-mode=fix",
+    ],
+    command = "update",
+    prefix = "github.com/randomizedcoder/go_nix_simple",
 )
 
-exports_files(["VERSION"])
+# Run gazelle with specific arguments for updating Go dependencies
+gazelle(
+    name = "gazelle-update-repos",
+    args = [
+        "-from_file=go.mod",
+        "-to_macro=deps.bzl%go_dependencies",
+        "-prune",
+    ],
+    command = "update-repos",
+)
