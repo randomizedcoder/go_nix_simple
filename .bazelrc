@@ -10,6 +10,39 @@ common --noenable_workspace
 # Use 'build:hp4' to apply these flags to the build command when --config=hp4 is used
 build:hp4 --remote_executor=grpc://hp4.home:8980
 build:hp4 --remote_cache=grpc://hp4.home:8980
+build:hp4 --remote_instance_name=main
+build:hp4 --remote_timeout=3600
+
+# Force remote execution
+build:hp4 --spawn_strategy=remote
+
+# Remote execution settings
+build:hp4 --remote_instance_name=fuse
+build:hp4 --remote_default_exec_properties=OSFamily=linux
+build:hp4 --remote_default_exec_properties=container-image=docker://ghcr.io/catthehacker/ubuntu:act-22.04@sha256:5f9c35c25db1d51a8ddaae5c0ba8d3c163c5e9a4a6cc97acd409ac7eae239448
+
+build:hp4 --strategy=GoCompile=remote
+build:hp4 --strategy=GoLink=remote
+build:hp4 --strategy=GoPackage=remote
+build:hp4 --strategy=Genrule=remote
+
+# Remote execution settings
+build:hp4 --noremote_local_fallback
+build:hp4 --noremote_accept_cached
+build:hp4 --remote_download_minimal
+build:hp4 --jobs=8
+
+# Only keep OCI operations local
+build:hp4 --strategy=OciImage=local
+build:hp4 --strategy=OciPush=local
+
+# Force shell toolchain to use container paths
+build:hp4 --incompatible_strict_action_env
+
+# Debug settings
+build:hp4 --verbose_failures
+build:hp4 --worker_verbose
+build:hp4 --show_progress_rate_limit=0.5
 
 # Optional: Download all remote outputs (useful for debugging)
 # build:hp4 --remote_download_outputs=all

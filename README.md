@@ -598,3 +598,7 @@ https://laurentsv.com/blog/2024/06/25/stop-the-go-and-docker-madness.html
 https://upx.github.io/
 https://sourceforge.net/projects/upx/
 https://words.filippo.io/shrink-your-go-binaries-with-this-one-weird-trick/
+
+## Nix and Bazel
+
+https://youtu.be/2wI5J8XYxM8?si=bOdpb6sL_OUUuId8

@@ -142,6 +142,21 @@ bazel-clean:
 # Build all variants
 bazel-build-all: bazel-build-distroless bazel-build-scratch
 
+# Remote build target for all variants
+bazel-build-all-remote:
+	for platform in $(BAZEL_PLATFORMS); do \
+		bazel build --config=hp4 \
+			--platforms=$$platform \
+			--remote_download_outputs=all \
+			--verbose_failures \
+			--execution_log_json_file=bazel-execution.json \
+			--show_timestamps \
+			//cmd/go_nix_simple:image_bazel_distroless_tarball \
+			//cmd/go_nix_simple:image_bazel_scratch_tarball \
+			--define REPO_PREFIX=$(BAZEL_REPO) \
+			--define VERSION=$(BAZEL_VERSION); \
+	done
+
 # Distroless image variants
 bazel-build-distroless:
 	for platform in $(BAZEL_PLATFORMS); do \
