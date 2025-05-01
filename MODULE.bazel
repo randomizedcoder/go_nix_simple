@@ -96,5 +96,7 @@ oci.pull(
 #     platforms = ["linux/arm64"],
 # )
 
-use_repo(oci, "distroless_base_amd64")
-#use_repo(oci, "distroless_base_amd64", "distroless_base_arm64")
+use_repo(oci,
+    "distroless_base_amd64",
+    "distroless_base_amd64_linux_amd64",
+)
