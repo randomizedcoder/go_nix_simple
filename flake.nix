@@ -267,13 +267,26 @@
             go
             gopls
             gotools
+            golint
+            golangci-lint
             go-tools
+            golangci-lint-langserver
             gomod2nix.packages.${system}.default
             #gomod2nix
             upx
+            # https://github.com/bazelbuild/bazel/tags
+            # https://github.com/NixOS/nixpkgs/blob/nixos-unstable/pkgs/development/tools/build-managers/bazel/bazel_7/default.nix#L524
             bazel_7
+            # https://github.com/bazel-contrib/bazel-gazelle/tags
+            # https://github.com/NixOS/nixpkgs/blob/nixos-unstable/pkgs/by-name/ba/bazel-gazelle/package.nix#L26
+            bazel-gazelle
+            bazel-buildtools
+            bazelisk
+            #
             curl
             jq
+            #
+            dive
           ];
           shellHook = ''
             export PS1='(nix-dev) \w\$ '
