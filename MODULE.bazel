@@ -8,8 +8,15 @@ bazel_dep(name = "rules_go", version = "0.54.0")  # https://github.com/bazel-con
 bazel_dep(name = "gazelle", version = "0.43.0")
 bazel_dep(name = "rules_oci", version = "2.2.6")  # https://github.com/bazel-contrib/rules_oci/tags
 bazel_dep(name = "rules_pkg", version = "1.1.0")  # https://github.com/bazelbuild/rules_pkg/tags
-bazel_dep(name = "aspect_bazel_lib", version = "2.7.2")
-#bazel_dep(name = "aspect_bazel_lib", version = "2.15.3") # https://registry.bazel.build/modules/aspect_bazel_lib
+#bazel_dep(name = "aspect_bazel_lib", version = "2.7.2")
+bazel_dep(name = "aspect_bazel_lib", version = "2.15.3") # https://registry.bazel.build/modules/aspect_bazel_lib
+
+bazel_dep(name = "platforms", version = "0.0.11")  #https://github.com/bazelbuild/platforms/tags
+#bazel_dep(name = "rules_platform", version = "0.1.0")  #https://github.com/bazelbuild/rules_platform/tags
+
+bazel_dep(name = "bazel_skylib", version = "1.7.1")  #https://github.com/bazelbuild/bazel-skylib/tags
+
+bazel_dep(name = "rules_distroless", version = "0.5.1") # https://github.com/GoogleContainerTools/rules_distroless/tags
 
 # # rules_pkg setup
 # pkg = use_extension("@rules_pkg//pkg:extensions.bzl", "pkg")
@@ -41,26 +48,53 @@ use_repo(
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 
 # Distroless base image
+# https://github.com/GoogleContainerTools/distroless
+
+# oci.pull(
+#     name = "distroless_static_amd64",
+#     digest = "sha256:3d0f463de06b7ddff27684ec3bfd0b54a425149d0f8685308b1fdf297b0265e9",
+#     image = "gcr.io/distroless/base-nossl-debian12",
+#     platforms = ["linux/amd64"],
+# )
+
+# oci.pull(
+#     name = "distroless_static_arm64",
+#     digest = "sha256:3d0f463de06b7ddff27684ec3bfd0b54a425149d0f8685308b1fdf297b0265e9",
+#     image = "gcr.io/distroless/base-nossl-debian12",
+#     platforms = ["linux/arm64"],
+# )
+
+# # distroless repository setup
+# distroless = use_extension("@rules_distroless//distroless:extensions.bzl", "distroless")
+# distroless.create(
+#     debian_version = "debian12",
+#     packages = [
+#         "base-files",
+#         "ca-certificates",
+#         "libc6",
+#         "passwd",
+#     ],
+# )
+# use_repo(
+#     distroless,
+#     "debian12_root_amd64",
+#     "debian12_root_arm64",
+# )
+
+# Distroless base images for different architectures
 oci.pull(
-    name = "distroless_static",
+    name = "distroless_base_amd64",
+    digest = "sha256:3d0f463de06b7ddff27684ec3bfd0b54a425149d0f8685308b1fdf297b0265e9",
     image = "gcr.io/distroless/static-debian12",
     platforms = ["linux/amd64"],
-    tag = "latest",
 )
 
-# Docker Hub scratch image
-oci.pull(
-    name = "docker_scratch",
-    image = "docker.io/library/scratch",
-    platforms = ["linux/amd64"],
-    tag = "latest",
-)
+# oci.pull(
+#     name = "distroless_base_arm64",
+#     digest = "sha256:3d0f463de06b7ddff27684ec3bfd0b54a425149d0f8685308b1fdf297b0265e9",
+#     image = "gcr.io/distroless/static-debian12",
+#     platforms = ["linux/arm64"],
+# )
 
-# Make both images available as dependencies
-use_repo(
-    oci,
-    "distroless_static",
-    "distroless_static_linux_amd64",
-    "docker_scratch",
-    "docker_scratch_linux_amd64",
-)
+use_repo(oci, "distroless_base_amd64")
+#use_repo(oci, "distroless_base_amd64", "distroless_base_arm64")

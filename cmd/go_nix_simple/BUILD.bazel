@@ -1,8 +1,20 @@
 # Load necessary rules
 load("@rules_go//go:def.bzl", "go_binary", "go_library")
-load("@rules_oci//oci:defs.bzl", "oci_image")
+
+#load("@rules_oci//oci:defs.bzl", "oci_image")
 #load("@rules_oci//oci:defs.bzl", "oci_image", "oci_tarball")
+#load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push", "oci_image_index")
+
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
+
+# load("@bazel_skylib//lib:selects.bzl", "selects")
+# load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+# load("@bazel_skylib//lib:expand_template.bzl", "expand_template")
+
+# load("@platforms//cpu:cpu.bzl", "cpu_constraints")
+# load("@platforms//os:os.bzl", "os_constraints")
+#load("@platforms//:defs.bzl", "platform")
 
 # Define the Go library for the application code
 go_library(
@@ -39,24 +51,154 @@ pkg_tar(
     srcs = [":go_nix_simple"],
 )
 
+# Empty base layer
 pkg_tar(
     name = "empty_layer",
     srcs = [],
 )
 
+# load("@rules_distroless//distroless:defs.bzl", "passwd", "group", "locale")
+
+# load("@rules_distroless//distroless/tests:asserts.bzl", "assert_tar_mtree")
+
+# #load("@rules_oci//oci:defs.bzl", "oci_image")
+
+# # Create group entries
+# group(
+#     name = "nonroot_group",
+#     entries = [
+#         {
+#             "name": "nonroot",
+#             "gid": 9999,
+#         },
+#         {
+#             "name": "nogroup",
+#             "gid": 65534,
+#         },
+#     ],
+# )
+
+# # Create passwd entries
+# passwd(
+#     name = "nonroot_user",
+#     entries = [
+#         {
+#             "username": "nonroot",
+#             "uid": 9999,
+#             "gid": 9999,
+#             "home": "/",
+#             "shell": "/sbin/nologin",
+#         },
+#     ],
+# )
+
+# # Set locale to C.UTF-8
+# locale(
+#     name = "container_locale",
+#     charset = "C.UTF-8",
+#     package = "@debian12_root_amd64//libc-bin:data",
+# )
+
+# Empty base image
 oci_image(
     name = "empty_base",
     tars = [":empty_layer"],
     os = "linux",
-    architecture = "amd64",
+    architecture = select({
+        ":platform_linux_amd64": "amd64",
+        "//conditions:default": "amd64",
+    }),
 )
 
+# Platform configurations
+platform(
+    name = "linux_arm64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:arm64",
+    ],
+)
+
+platform(
+    name = "linux_amd64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "platform_linux_arm64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:arm64",
+    ],
+)
+
+config_setting(
+    name = "platform_linux_amd64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# # Distroless image
+# oci_image(
+#     name = "image_bazel_distroless",
+#     base = select({
+#         "//platforms:linux_amd64": "@distroless_static_amd64",
+#         "//platforms:linux_arm64": "@distroless_static_arm64",
+#         "//conditions:default": "@distroless_static_amd64",
+#     }),
+#     tars = [":go_nix_simple_layer"],
+#     entrypoint = ["/go_nix_simple"],
+#     user = "nonroot",
+# )
+
 # Distroless image
+# oci_image(
+#     name = "image_bazel_distroless",
+#     base = select({
+#         ":platform_linux_amd64": "@debian12_root_amd64",
+#         ":platform_linux_arm64": "@debian12_root_arm64",
+#         "//conditions:default": "@debian12_root_amd64",
+#     }),
+#     tars = [
+#         ":go_nix_simple_layer",
+#         ":nonroot_user",
+#         ":nonroot_group",
+#         ":container_locale",
+#     ],
+#     entrypoint = ["/go_nix_simple"],
+#     user = "nonroot",
+# )
 oci_image(
     name = "image_bazel_distroless",
-    base = "@distroless_static",
+    base = "@distroless_base_amd64",
+    # base = select({
+    #     ":platform_linux_amd64": "@distroless_base_amd64",
+    #     ":platform_linux_arm64": "@distroless_base_arm64",
+    #     "//conditions:default": "@distroless_base_amd64",
+    # }),
     tars = [":go_nix_simple_layer"],
     entrypoint = ["/go_nix_simple"],
+    user = "nonroot",
+)
+
+
+# # Multi-arch image index
+# oci_image_index(
+#     name = "image_bazel_distroless_index",
+#     images = [":image_bazel_distroless"],
+#     platforms = [
+#         ":linux_amd64",
+#         ":linux_arm64",
+#     ],
+# )
+oci_image_index(
+    name = "image_bazel_distroless_index",
+    images = [":image_bazel_distroless"],
 )
 
 # Scratch image
@@ -65,4 +207,57 @@ oci_image(
     base = ":empty_base",
     tars = [":go_nix_simple_layer"],
     entrypoint = ["/go_nix_simple"],
+    user = "nonroot",
 )
+
+# # Multi-arch platform configuration
+# constraint_setting(name = "myplatform")
+
+# constraint_value(
+#     name = "linux_amd64",
+#     constraint_setting = ":myplatform",
+#     visibility = ["//visibility:public"],
+# )
+
+# constraint_value(
+#     name = "linux_arm64",
+#     constraint_setting = ":myplatform",
+#     visibility = ["//visibility:public"],
+# )
+
+# Distroless push target
+oci_push(
+    name = "image_bazel_distroless_tarball",
+    image = ":image_bazel_distroless_index",
+    repository = "docker.io/randomizedcoder/go_nix_simple",
+    remote_tags = ["latest"],
+)
+
+# Scratch push target
+oci_push(
+    name = "image_bazel_scratch_tarball",
+    image = ":image_bazel_scratch",
+    repository = "docker.io/randomizedcoder/go_nix_simple",
+    remote_tags = ["latest"],
+)
+
+# # Add test assertions
+# assert_tar_mtree(
+#     name = "test_passwd",
+#     actual = ":nonroot_user",
+#     expected = """\
+# #mtree
+# ./etc time=0.0 mode=755 gid=0 uid=0 type=dir
+# ./etc/passwd time=0.0 mode=644 gid=0 uid=0 type=file
+# """,
+# )
+
+# assert_tar_mtree(
+#     name = "test_group",
+#     actual = ":nonroot_group",
+#     expected = """\
+# #mtree
+# ./etc time=0.0 mode=755 gid=0 uid=0 type=dir
+# ./etc/group time=0.0 mode=644 gid=0 uid=0 type=file
+# """,
+# )

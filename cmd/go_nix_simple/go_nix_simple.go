@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	sleepTimeCst = 6 * time.Second
+	sleepTimeCst = 5 * time.Second
 
 	debugLevelCst = 11 // Default debug level
 

@@ -83,11 +83,16 @@ PUSH_NIX_TARGETS := $(NIX_IMAGE_TARGETS:build-%=push-%)
 PUSH_DOCKER_TARGETS := $(VALID_DOCKER_IMAGE_TARGETS:$(DOCKER_BUILD_PREFIX)-%=push_docker-%)
 ALL_PUSH_TARGETS := $(PUSH_NIX_TARGETS) $(PUSH_DOCKER_TARGETS)
 
-BAZEL_TARGETS := \
-	image_bazel_distroless_noupx \
-	image_bazel_distroless_upx \
-	image_bazel_scratch_noupx \
-	image_bazel_scratch_upx
+#--------------------------
+# Bazel Configuration
+#--------------------------
+BAZEL_REPO := docker.io/randomizedcoder
+BAZEL_VERSION := latest
+BAZEL_PLATFORMS := //platforms:linux_amd64
+#BAZEL_PLATFORMS := //platforms:linux_amd64 //platforms:linux_arm64
+
+# Generate all combinations
+BAZEL_TARGETS := $(foreach img,$(BAZEL_IMAGES),$(foreach plat,$(BAZEL_PLATFORMS),image_bazel_$(img)_$(plat)))
 
 # --- Phony Targets ---
 .PHONY: all all-nix all-docker all-bazel \
@@ -104,7 +109,9 @@ BAZEL_TARGETS := \
 	deploy_athens down_athens run_athens ls dive run curl prepare clear_go_mod_cache go_clean \
 	flake_metadata flake_show \
 	install_bazel gazelle_init gazelle_run bazel_build bazel_run \
-	bazel_build_a_tarball bazel_go
+	bazel_build_a_tarball bazel_go \
+	bazel-setup bazel-update bazel-clean \
+	bazel-build-all
 
 # --- Aggregate Targets ---
 all: prepare-output-dir all-nix all-docker summary
@@ -112,44 +119,46 @@ all-validate: prepare-output-dir all-nix all-docker validate-all summary validat
 all-nix: prepare-output-dir $(NIX_IMAGE_TARGETS)
 all-docker: prepare-output-dir generate-containerfiles $(VALID_DOCKER_IMAGE_TARGETS)
 
-# --- Aggregate Bazel Targets ---
-all-bazel:
-	@echo "================================"
-	@echo "Make all-bazel"
-	@for target in image_bazel_distroless_noupx image_bazel_distroless_upx image_bazel_scratch_noupx image_bazel_scratch_upx; do \
-		echo "Building $$target"; \
-		bazel build //cmd/go_nix_simple:$${target}_tarball \
-			--define REPO_PREFIX=docker.io/randomizedcoder \
-			--define VERSION=latest || exit 1; \
-		docker load < bazel-bin/cmd/go_nix_simple/$${target}_tarball/tarball.tar || exit 1; \
+#------------------------
+# Bazel Setup & Maintenance
+#------------------------
+.PHONY: bazel-setup bazel-update bazel-clean
+
+bazel-setup:
+	go install github.com/bazelbuild/bazel-gazelle/cmd/gazelle@latest
+
+bazel-update:
+	bazel run //:gazelle -- update-repos -from_file=go.mod
+	bazel run //:gazelle
+
+bazel-clean:
+	bazel clean --expunge
+
+#------------------------
+# Bazel Build Targets
+#------------------------
+.PHONY: bazel-build-all bazel-build-distroless bazel-build-scratch
+
+# Build all variants
+bazel-build-all: bazel-build-distroless bazel-build-scratch
+
+# Distroless image variants
+bazel-build-distroless:
+	for platform in $(BAZEL_PLATFORMS); do \
+		bazel build --platforms=$$platform \
+			//cmd/go_nix_simple:image_bazel_distroless_tarball \
+			--define REPO_PREFIX=$(BAZEL_REPO) \
+			--define VERSION=$(BAZEL_VERSION); \
 	done
-	@echo "================================"
-	@echo "Make all-bazel complete"
 
-# Individual bazel targets
-image_bazel_distroless_noupx:
-	bazel build //cmd/go_nix_simple:image_bazel_distroless_noupx_tarball \
-		--define REPO_PREFIX=docker.io/randomizedcoder \
-		--define VERSION=latest
-	docker load < bazel-bin/cmd/go_nix_simple/image_bazel_distroless_noupx_tarball/tarball.tar
-
-image_bazel_distroless_upx:
-	bazel build //cmd/go_nix_simple:image_bazel_distroless_upx_tarball \
-		--define REPO_PREFIX=docker.io/randomizedcoder \
-		--define VERSION=latest
-	docker load < bazel-bin/cmd/go_nix_simple/image_bazel_distroless_upx_tarball/tarball.tar
-
-image_bazel_scratch_noupx:
-	bazel build //cmd/go_nix_simple:image_bazel_scratch_noupx_tarball \
-		--define REPO_PREFIX=docker.io/randomizedcoder \
-		--define VERSION=latest
-	docker load < bazel-bin/cmd/go_nix_simple/image_bazel_scratch_noupx_tarball/tarball.tar
-
-image_bazel_scratch_upx:
-	bazel build //cmd/go_nix_simple:image_bazel_scratch_upx_tarball \
-		--define REPO_PREFIX=docker.io/randomizedcoder \
-		--define VERSION=latest
-	docker load < bazel-bin/cmd/go_nix_simple/image_bazel_scratch_upx_tarball/tarball.tar
+# Scratch image variants
+bazel-build-scratch:
+	for platform in $(BAZEL_PLATFORMS); do \
+		bazel build --platforms=$$platform \
+			//cmd/go_nix_simple:image_bazel_scratch_tarball \
+			--define REPO_PREFIX=$(BAZEL_REPO) \
+			--define VERSION=$(BAZEL_VERSION); \
+	done
 
 # --- Add Aggregate Push Targets ---
 push-all: $(ALL_PUSH_TARGETS)
@@ -166,7 +175,6 @@ validate-all-nix: $(VALIDATE_NIX_TARGETS)
 validate-all-docker: $(VALIDATE_DOCKER_TARGETS)
 
 # e.g. make validate-all -j1
-
 
 
 # --- Prepare Output Directory ---
