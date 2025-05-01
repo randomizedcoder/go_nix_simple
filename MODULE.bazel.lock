@@ -267,12 +267,12 @@
     "@@rules_oci~//oci:extensions.bzl%oci": {
       "general": {
         "bzlTransitiveDigest": "DAdh+juZhv1FBpwEmrq4DPRlAeKsuX1GKAbocZxwdEc=",
-        "usagesDigest": "BEWZLDK6K93aD/fX9z/hv5m8ajmHnawZMz7QeO6kR1o=",
+        "usagesDigest": "Yuo4HzkkSk5ktTLZiWABXwxewggBTIXytqVTJT8KhpA=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
         "generatedRepoSpecs": {
-          "distroless_base_amd64_linux_amd64": {
+          "distroless_static_linux_amd64": {
             "bzlFile": "@@rules_oci~//oci/private:pull.bzl",
             "ruleClassName": "oci_pull",
             "attributes": {
@@ -280,26 +280,41 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/static-debian12",
-              "identifier": "sha256:3d0f463de06b7ddff27684ec3bfd0b54a425149d0f8685308b1fdf297b0265e9",
+              "identifier": "sha256:c0f429e16b13e583da7e5a6ec20dd656d325d88e6819cafe0adb0828976529dc",
               "platform": "linux/amd64",
-              "target_name": "distroless_base_amd64_linux_amd64",
+              "target_name": "distroless_static_linux_amd64",
               "bazel_tags": []
             }
           },
-          "distroless_base_amd64": {
+          "distroless_static_linux_arm64": {
             "bzlFile": "@@rules_oci~//oci/private:pull.bzl",
-            "ruleClassName": "oci_alias",
+            "ruleClassName": "oci_pull",
             "attributes": {
-              "target_name": "distroless_base_amd64",
               "www_authenticate_challenges": {},
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/static-debian12",
-              "identifier": "sha256:3d0f463de06b7ddff27684ec3bfd0b54a425149d0f8685308b1fdf297b0265e9",
+              "identifier": "sha256:c0f429e16b13e583da7e5a6ec20dd656d325d88e6819cafe0adb0828976529dc",
+              "platform": "linux/arm64",
+              "target_name": "distroless_static_linux_arm64",
+              "bazel_tags": []
+            }
+          },
+          "distroless_static": {
+            "bzlFile": "@@rules_oci~//oci/private:pull.bzl",
+            "ruleClassName": "oci_alias",
+            "attributes": {
+              "target_name": "distroless_static",
+              "www_authenticate_challenges": {},
+              "scheme": "https",
+              "registry": "gcr.io",
+              "repository": "distroless/static-debian12",
+              "identifier": "sha256:c0f429e16b13e583da7e5a6ec20dd656d325d88e6819cafe0adb0828976529dc",
               "platforms": {
-                "@@platforms//cpu:x86_64": "@distroless_base_amd64_linux_amd64"
+                "@@platforms//cpu:x86_64": "@distroless_static_linux_amd64",
+                "@@platforms//cpu:arm64": "@distroless_static_linux_arm64"
               },
-              "bzlmod_repository": "distroless_base_amd64",
+              "bzlmod_repository": "distroless_static",
               "reproducible": true
             }
           },
@@ -436,8 +451,9 @@
         },
         "moduleExtensionMetadata": {
           "explicitRootModuleDirectDeps": [
-            "distroless_base_amd64",
-            "distroless_base_amd64_linux_amd64"
+            "distroless_static",
+            "distroless_static_linux_amd64",
+            "distroless_static_linux_arm64"
           ],
           "explicitRootModuleDirectDevDeps": [],
           "useAllRepos": "NO",
