@@ -10,7 +10,7 @@ load("@aspect_bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
 load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load", "oci_push")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
-load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+#load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
 # Define the Go library for the application code
 go_library(
@@ -19,14 +19,14 @@ go_library(
     importpath = "github.com/randomizedcoder/go_nix_simple/cmd/go_nix_simple",
     visibility = ["//visibility:private"],
     deps = [
-        "//vendor/github.com/ClickHouse/clickhouse-go/v2:clickhouse-go",
-        "//vendor/github.com/grafana/pyroscope-go",
-        "//vendor/github.com/nats-io/nats.go:nats_go",
-        "//vendor/github.com/pkg/profile",
-        "//vendor/github.com/prometheus/client_golang/prometheus",
-        "//vendor/github.com/prometheus/client_golang/prometheus/promauto",
-        "//vendor/github.com/prometheus/client_golang/prometheus/promhttp",
-        "//vendor/github.com/redis/go-redis/v9:go-redis",
+        "@com_github_clickhouse_clickhouse_go_v2//:clickhouse-go",
+        "@com_github_grafana_pyroscope_go//:pyroscope-go",
+        "@com_github_nats_io_nats_go//:nats_go",
+        "@com_github_pkg_profile//:profile",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_client_golang//prometheus/promauto",
+        "@com_github_prometheus_client_golang//prometheus/promhttp",
+        "@com_github_redis_go_redis_v9//:go-redis",
     ],
 )
 

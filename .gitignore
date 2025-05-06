@@ -15,4 +15,8 @@ bazel-*
 
 vendor
 
+# Go binary
+go_nix_simple
+cmd/go_nix_simple/go_nix_simple
+
 # end
