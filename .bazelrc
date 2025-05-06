@@ -10,6 +10,9 @@ common --enable_bzlmod=true
 # Disable WORKSPACE file
 common --noenable_workspace
 
+# Disable C++ toolchain detection, or you get a weird error even with go and cgo disabled.
+# ERROR: /home/das/Downloads/go_nix_simple/cmd/go_nix_simple/BUILD.bazel:34:8: Testing //cmd/go_nix_simple:go_nix_simple_test failed: (Exit 34): Remote Execution Failure:
+# Invalid Argument: Failed to run command: Failed to start process: fork/exec external/bazel_tools/tools/test/test-setup.sh: no such file or directory
 common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
 
 # Configuration for using Buildbarn on hp4.home
