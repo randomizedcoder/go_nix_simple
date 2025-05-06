@@ -14,51 +14,49 @@ bazel_dep(name = "rules_go", version = "0.54.0")  # https://github.com/bazel-con
 bazel_dep(name = "gazelle", version = "0.43.0")
 bazel_dep(name = "rules_oci", version = "2.2.6")  # https://github.com/bazel-contrib/rules_oci/tags
 bazel_dep(name = "rules_pkg", version = "1.1.0")  # https://github.com/bazelbuild/rules_pkg/tags
-bazel_dep(name = "rules_python", version = "1.4.0")  # https://github.com/bazelbuild/rules_python/tags
+#bazel_dep(name = "rules_python", version = "1.4.0")  # https://github.com/bazelbuild/rules_python/tags
 
-bazel_dep(name = "aspect_bazel_lib", version = "2.15.3") # https://registry.bazel.build/modules/aspect_bazel_lib
-
+bazel_dep(name = "aspect_bazel_lib", version = "2.15.3")  # https://registry.bazel.build/modules/aspect_bazel_lib
 bazel_dep(name = "platforms", version = "0.0.11")  #https://github.com/bazelbuild/platforms/tags
 #bazel_dep(name = "rules_platform", version = "0.1.0")  #https://github.com/bazelbuild/rules_platform/tags
 
 bazel_dep(name = "bazel_skylib", version = "1.7.1")  #https://github.com/bazelbuild/bazel-skylib/tags
-
-bazel_dep(name = "rules_distroless", version = "0.5.1") # https://github.com/GoogleContainerTools/rules_distroless/tags
+bazel_dep(name = "rules_distroless", version = "0.5.1")  # https://github.com/GoogleContainerTools/rules_distroless/tags
 
 #bazel_dep(name = "rules_cc", version = "0.1.1") # https://github.com/bazelbuild/rules_cc/tags
 
-bazel_dep(name = "rules_shell", version = "0.4.0") # https://github.com/bazelbuild/rules_shell/tags
+bazel_dep(name = "rules_shell", version = "0.4.0")  # https://github.com/bazelbuild/rules_shell/tags
 
-# Python toolchain setup
-python = use_extension("@rules_python//python/extensions:python.bzl", "python")
-python.toolchain(
-    python_version = "3.13",
-    is_default = True,
-)
-use_repo(python, "python_3_13")
+# # Python toolchain setup
+# python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+# python.toolchain(
+#     python_version = "3.13",
+#     is_default = True,
+# )
+# use_repo(python, "python_3_13")
 
-# Configure pip dependencies
-pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
-pip.parse(
-    hub_name = "pypi",
-    python_version = "3.13",
-    requirements_lock = "//:requirements_lock.txt",
-)
-use_repo(pip, "pypi")
+# # Configure pip dependencies
+# pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+# pip.parse(
+#     hub_name = "pypi",
+#     python_version = "3.13",
+#     requirements_lock = "//:requirements_lock.txt",
+# )
+# use_repo(pip, "pypi")
 
-# Register the Python toolchain
-register_toolchains("//tools/python:python_toolchain")
+# # Register the Python toolchain
+# register_toolchains("//tools/python:python_toolchain")
 
-# Configure rules_pkg to use our Python toolchain
-pkg = use_extension("@rules_pkg//pkg:extensions.bzl", "pkg")
-pkg.package(
-    name = "pkg",
-    python_interpreter = "@python_3_13//:python3",
-    python_interpreter_target = "@python_3_13//:python3",
-    # Ensure the Python interpreter is available in the execution environment
-    python_interpreter_path = "python3",
-)
-use_repo(pkg, "pkg")
+# # Configure rules_pkg to use our Python toolchain
+# pkg = use_extension("@rules_pkg//pkg:extensions.bzl", "pkg")
+# pkg.package(
+#     name = "pkg",
+#     python_interpreter = "@python_3_13//:python3",
+#     python_interpreter_target = "@python_3_13//:python3",
+#     # Ensure the Python interpreter is available in the execution environment
+#     python_interpreter_path = "python3",
+# )
+# use_repo(pkg, "pkg")
 
 # Go toolchain setup
 # https://github.com/bazel-contrib/rules_go/blob/master/docs/go/core/bzlmod.md#go-sdks
@@ -76,6 +74,7 @@ use_repo(
     go_deps,
     "com_github_clickhouse_clickhouse_go_v2",
     "com_github_docker_docker",
+    "com_github_docker_go_connections",
     "com_github_grafana_pyroscope_go",
     "com_github_nats_io_nats_go",
     "com_github_pkg_profile",
@@ -100,7 +99,6 @@ oci.pull(
     ],
     tag = "nonroot",
 )
-
 use_repo(
     oci,
     "distroless_static",

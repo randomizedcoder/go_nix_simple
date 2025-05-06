@@ -420,6 +420,13 @@ gazelle_run:
 bazel_build:
 	bazel build --verbose_failures //cmd/go_nix_simple:go_nix_simple_binary_noupx
 
+bazel_build_oci_distroless:
+	bazel build //cmd/go_nix_simple:image_bazel_distroless
+
+bazel_build_oci_scratch:
+	bazel build //cmd/go_nix_simple:image_bazel_scratch
+
+
 # bazel_build:
 # 	bazel build //cmd/go_nix_simple:go_nix_simple
 

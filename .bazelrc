@@ -22,7 +22,7 @@ build:hp4 --remote_timeout=3600
 
 # Shell toolchain configuration
 build:hp4 --shell_executable=/bin/bash
-build:hp4 --incompatible_strict_action_env
+#build:hp4 --incompatible_strict_action_env
 
 # Force remote execution
 build:hp4 --spawn_strategy=remote
@@ -46,9 +46,9 @@ build:hp4 --jobs=8
 build:hp4 --strategy=OciImage=local
 build:hp4 --strategy=OciPush=local
 
-# Python toolchain settings
-build:hp4 --incompatible_use_python_toolchains=true
-build:hp4 --extra_toolchains=//tools/python:python_toolchain
+# # Python toolchain settings
+# build:hp4 --incompatible_use_python_toolchains=true
+# build:hp4 --extra_toolchains=//tools/python:python_toolchain
 
 # Debug settings
 build:hp4 --verbose_failures
