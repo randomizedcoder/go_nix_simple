@@ -10,6 +10,8 @@ common --enable_bzlmod=true
 # Disable WORKSPACE file
 common --noenable_workspace
 
+common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+
 # Configuration for using Buildbarn on hp4.home
 # Use 'build:hp4' to apply these flags to the build command when --config=hp4 is used
 build:hp4 --remote_executor=grpc://hp4.home:8980
