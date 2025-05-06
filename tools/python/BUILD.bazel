@@ -1,0 +1,33 @@
+load("@rules_python//python:defs.bzl", "py_runtime_pair")
+load("@rules_python//python:py_runtime.bzl", "py_runtime")
+
+# Use the default Python runtime from the toolchain
+py_runtime(
+    name = "python_runtime",
+    # Include all Python files needed for execution
+    files = ["@python_3_13//:files"],
+    interpreter = "@python_3_13//:python3",
+    python_version = "PY3",
+    # Ensure the runtime is available for all rules
+    visibility = ["//visibility:public"],
+)
+
+py_runtime_pair(
+    name = "python_runtime_pair",
+    py2_runtime = None,
+    py3_runtime = ":python_runtime",
+    visibility = ["//visibility:public"],
+)
+
+toolchain(
+    name = "python_toolchain",
+    # Ensure the toolchain is compatible with remote execution
+    exec_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    toolchain = ":python_runtime_pair",
+    toolchain_type = "@rules_python//python:toolchain_type",
+    # Make this toolchain available to all rules
+    visibility = ["//visibility:public"],
+)

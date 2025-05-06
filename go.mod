@@ -5,6 +5,7 @@ go 1.24.1
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.34.0
 	github.com/docker/docker v28.0.4+incompatible
+	github.com/docker/go-connections v0.5.0
 	github.com/grafana/pyroscope-go v1.2.2
 	github.com/nats-io/nats.go v1.41.2
 	github.com/pkg/profile v1.7.0
@@ -21,7 +22,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/felixge/fgprof v0.9.3 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect

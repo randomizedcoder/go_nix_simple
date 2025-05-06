@@ -6,12 +6,12 @@ go_library(
     importpath = "github.com/randomizedcoder/go_nix_simple/cmd/validate-image",
     visibility = ["//visibility:private"],
     deps = [
-        "@com_github_docker_docker//api/types/container",
-        "@com_github_docker_docker//api/types/image",
-        "@com_github_docker_docker//client",
-        "@com_github_docker_go_connections//nat",
-        "@com_github_prometheus_common//expfmt",
-        "@com_github_prometheus_common//model",
+        "//vendor/github.com/docker/docker/api/types/container",
+        "//vendor/github.com/docker/docker/api/types/image",
+        "//vendor/github.com/docker/docker/client",
+        "//vendor/github.com/docker/go-connections/nat",
+        "//vendor/github.com/prometheus/common/expfmt",
+        "//vendor/github.com/prometheus/common/model",
     ],
 )
 

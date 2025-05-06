@@ -287,6 +287,8 @@
             jq
             #
             dive
+            #
+            code-cursor
           ];
           shellHook = ''
             export PS1='(nix-dev) \w\$ '

@@ -1,0 +1,95 @@
+load("@aspect_bazel_lib//lib:testing.bzl", "assert_archive_contains")
+load("@aspect_bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
+load("@container_structure_test//:defs.bzl", "container_structure_test")
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
+
+go_library(
+    name = "app_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/aspect-build/bazel-examples/oci_go_image",
+    visibility = ["//visibility:private"],
+    deps = ["@com_github_google_go_cmp//cmp"],
+)
+
+go_test(
+    name = "app_test",
+    size = "small",
+    srcs = ["main_test.go"],
+    embed = [":app_lib"],
+)
+
+go_binary(
+    name = "app",
+    embed = [":app_lib"],
+    visibility = ["//visibility:public"],
+)
+
+# Put app go_binary into a tar layer.
+pkg_tar(
+    name = "app_layer",
+    srcs = [":app"],
+    # If the binary depends on RUNFILES, uncomment the attribute below.
+    # include_runfiles = True
+)
+
+# Prove that the application is at the path we expect in that tar.
+assert_archive_contains(
+    name = "test_app_layer",
+    archive = "app_layer.tar",
+    expected = ["app"],
+)
+
+oci_image(
+    name = "image",
+    # This is defined by an oci.pull() call in /MODULE.bazel
+    base = "@distroless_base",
+    entrypoint = ["/app"],
+    # Link the resulting image back to the repository where the build is defined.
+    labels = {
+        "org.opencontainers.image.source": "https://github.com/aspect-build/bazel-examples",
+    },
+    tars = [":app_layer"],
+)
+
+# This is the target that should be released to the target platform
+platform_transition_filegroup(
+    name = "transitioned_image",
+    srcs = [":image"],
+    target_platform = select({
+        "@platforms//cpu:arm64": "@rules_go//go/toolchain:linux_arm64",
+        "@platforms//cpu:x86_64": "@rules_go//go/toolchain:linux_amd64",
+    }),
+)
+
+# $ bazel run //oci_go_image:load
+# $ docker run --rm gcr.io/example:latest
+#   string(
+# -       "Hello World",
+# +       "Hello Go",
+#   )
+oci_load(
+    name = "load",
+    # Use the image built for the target platform
+    image = ":transitioned_image",
+    repo_tags = ["gcr.io/example:latest"],
+)
+
+container_structure_test(
+    name = "test",
+    configs = ["test.yaml"],
+    # Use the image built for the target platform as it runs through docker
+    image = ":transitioned_image",
+    tags = [
+        "no-remote-exec",
+        "requires-docker",
+    ],
+)
+
+oci_push(
+    name = "push",
+    image = ":transitioned_image",
+    remote_tags = ["latest"],
+    repository = "ghcr.io/aspect-build/oci_go_image_example",
+)

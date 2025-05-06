@@ -13,4 +13,6 @@ bazel-out
 bazel-testlogs
 bazel-*
 
+vendor
+
 # end
