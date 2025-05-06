@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	sleepTimeCst = 6 * time.Second
+	sleepTimeCst = 5 * time.Second
 
 	debugLevelCst = 11 // Default debug level
 
@@ -66,8 +66,20 @@ var (
 	)
 )
 
-func main() {
+// handleVersionFlag checks if the version flag is set and returns true if the program should exit
+func handleVersionFlag() bool {
+	v := flag.Bool("v", false, "show version")
+	flag.Parse()
 
+	if *v {
+		// Use fmt.Printf for version output as it's informational, not an error/log event
+		fmt.Printf("go_nix_simple commit:%s\tdate(UTC):%s\tversion:%s\n", commit, date, version)
+		return true
+	}
+	return false
+}
+
+func main() {
 	pyroscopeServer := flag.String("pyroscope.server", "", "Pyroscope server address (e.g., http://localhost:4040)")
 	pyroscopeApp := flag.String("pyroscope.app", "go_nix_simple", "Application name for Pyroscope")
 
@@ -90,21 +102,15 @@ func main() {
 	promListAddr := fmt.Sprintf(":%d", *promPort)
 
 	d := flag.Uint("d", debugLevelCst, "debug level")
-	v := flag.Bool("v", false, "show version")
 
-	flag.Parse()
+	if handleVersionFlag() {
+		os.Exit(0)
+	}
 
 	debugLevel = *d
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.LUTC | log.Lshortfile | log.Lmsgprefix)
 	log.SetPrefix("go_nix_simple: ")
 
-	if *v {
-		// Use fmt.Printf for version output as it's informational, not an error/log event
-		fmt.Printf("go_nix_simple commit:%s\tdate(UTC):%s\tversion:%s\n", commit, date, version)
-		os.Exit(0)
-	}
-
-	log.Printf("Starting go_nix_simple (PID: %d)", os.Getpid())
 	if debugLevel > 10 {
 		log.Printf("Debug level set to: %d", debugLevel)
 	}

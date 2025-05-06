@@ -147,7 +147,6 @@ bazel-build-all-remote:
 	for platform in $(BAZEL_PLATFORMS); do \
 		bazel build --config=hp4 \
 			--platforms=$$platform \
-			--remote_download_outputs=all \
 			--verbose_failures \
 			--execution_log_json_file=bazel-execution.json \
 			--show_timestamps \

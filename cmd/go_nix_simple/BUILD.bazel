@@ -1,11 +1,16 @@
+load("@aspect_bazel_lib//lib:testing.bzl", "assert_archive_contains")
+load("@aspect_bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
+
 #
 # cmd/go_nix_simple/BUILD.bazel
 #
-load("@rules_go//go:def.bzl", "go_binary", "go_library")
-
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push", "oci_image_index")
-
+# I don't understand why this file doesn't look more like this one:
+# https://github.com/aspect-build/bazel-examples/blob/main/oci_go_image/BUILD.bazel
+#
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load", "oci_push")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
 # Define the Go library for the application code
 go_library(
@@ -14,18 +19,25 @@ go_library(
     importpath = "github.com/randomizedcoder/go_nix_simple/cmd/go_nix_simple",
     visibility = ["//visibility:private"],
     deps = [
-        "@com_github_clickhouse_clickhouse_go_v2//:clickhouse-go",
-        "@com_github_grafana_pyroscope_go//:pyroscope-go",
-        "@com_github_nats_io_nats_go//:nats_go",
-        "@com_github_pkg_profile//:profile",
-        "@com_github_prometheus_client_golang//prometheus",
-        "@com_github_prometheus_client_golang//prometheus/promauto",
-        "@com_github_prometheus_client_golang//prometheus/promhttp",
-        "@com_github_redis_go_redis_v9//:go-redis",
+        "//vendor/github.com/ClickHouse/clickhouse-go/v2:clickhouse-go",
+        "//vendor/github.com/grafana/pyroscope-go",
+        "//vendor/github.com/nats-io/nats.go:nats_go",
+        "//vendor/github.com/pkg/profile",
+        "//vendor/github.com/prometheus/client_golang/prometheus",
+        "//vendor/github.com/prometheus/client_golang/prometheus/promauto",
+        "//vendor/github.com/prometheus/client_golang/prometheus/promhttp",
+        "//vendor/github.com/redis/go-redis/v9:go-redis",
     ],
 )
 
-# https://github.com/bazel-contrib/rules_oci/blob/main/docs/go.md?plain=1
+# Unit tests
+go_test(
+    name = "go_nix_simple_test",
+    size = "small",
+    srcs = ["go_nix_simple_test.go"],
+    embed = [":go_nix_simple_lib"],
+    pure = "on",
+)
 
 # Build binary
 go_binary(
@@ -40,6 +52,15 @@ go_binary(
 pkg_tar(
     name = "go_nix_simple_layer",
     srcs = [":go_nix_simple"],
+    # If the binary depends on RUNFILES, uncomment the attribute below.
+    # include_runfiles = True
+)
+
+# Verify the tar contents
+assert_archive_contains(
+    name = "test_go_nix_simple_layer",
+    archive = "go_nix_simple_layer.tar",
+    expected = ["go_nix_simple"],
 )
 
 # Empty base layer
@@ -51,12 +72,12 @@ pkg_tar(
 # Empty base image
 oci_image(
     name = "empty_base",
-    tars = [":empty_layer"],
-    os = "linux",
     architecture = select({
         ":platform_linux_amd64": "amd64",
         "//conditions:default": "amd64",
     }),
+    os = "linux",
+    tars = [":empty_layer"],
 )
 
 config_setting(
@@ -75,41 +96,82 @@ config_setting(
     ],
 )
 
+# Distroless image
 oci_image(
     name = "image_bazel_distroless",
     base = "@distroless_static",
-    tars = [":go_nix_simple_layer"],
     entrypoint = ["/go_nix_simple"],
+    labels = {
+        "org.opencontainers.image.source": "https://github.com/randomizedcoder/go_nix_simple",
+        "org.opencontainers.image.description": "Go Nix Simple application",
+    },
+    tars = [":go_nix_simple_layer"],
     user = "nonroot",
+)
+
+# Platform transition for distroless image
+platform_transition_filegroup(
+    name = "transitioned_distroless",
+    srcs = [":image_bazel_distroless"],
+    target_platform = select({
+        "@platforms//cpu:arm64": "@rules_go//go/toolchain:linux_arm64",
+        "@platforms//cpu:x86_64": "@rules_go//go/toolchain:linux_amd64",
+    }),
 )
 
 oci_image_index(
     name = "image_bazel_distroless_index",
-    images = [":image_bazel_distroless"],
+    images = [":transitioned_distroless"],
 )
 
 # Scratch image
 oci_image(
     name = "image_bazel_scratch",
     base = ":empty_base",
-    tars = [":go_nix_simple_layer"],
     entrypoint = ["/go_nix_simple"],
+    labels = {
+        "org.opencontainers.image.source": "https://github.com/randomizedcoder/go_nix_simple",
+        "org.opencontainers.image.description": "Go Nix Simple application (scratch)",
+    },
+    tars = [":go_nix_simple_layer"],
     user = "nonroot",
+)
+
+# Platform transition for scratch image
+platform_transition_filegroup(
+    name = "transitioned_scratch",
+    srcs = [":image_bazel_scratch"],
+    target_platform = select({
+        "@platforms//cpu:arm64": "@rules_go//go/toolchain:linux_arm64",
+        "@platforms//cpu:x86_64": "@rules_go//go/toolchain:linux_amd64",
+    }),
+)
+
+# Local testing targets
+oci_load(
+    name = "load_distroless",
+    image = ":transitioned_distroless",
+    repo_tags = ["docker.io/randomizedcoder/go_nix_simple:local"],
+)
+
+oci_load(
+    name = "load_scratch",
+    image = ":transitioned_scratch",
+    repo_tags = ["docker.io/randomizedcoder/go_nix_simple:local-scratch"],
 )
 
 # Distroless push target
 oci_push(
     name = "image_bazel_distroless_tarball",
     image = ":image_bazel_distroless_index",
-    repository = "docker.io/randomizedcoder/go_nix_simple",
     remote_tags = ["latest"],
+    repository = "docker.io/randomizedcoder/go_nix_simple",
 )
 
 # Scratch push target
 oci_push(
     name = "image_bazel_scratch_tarball",
-    image = ":image_bazel_scratch",
-    repository = "docker.io/randomizedcoder/go_nix_simple",
+    image = ":transitioned_scratch",
     remote_tags = ["latest"],
+    repository = "docker.io/randomizedcoder/go_nix_simple",
 )
-
