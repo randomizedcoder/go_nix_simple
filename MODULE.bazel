@@ -1,8 +1,15 @@
 #
 # MODULE.bazel
 #
+# https://registry.bazel.build/
+#
 # Nice example of a MODULE.bazel file:
 # https://github.com/aspect-build/bazel-examples/blob/main/MODULE.bazel
+#
+# https://fzakaria.com/2024/08/29/bazel-overlay-pattern
+#
+# https://github.com/llvm/llvm-project/blob/main/utils/bazel/README.md
+
 
 module(
     name = "go_nix_simple",
@@ -12,6 +19,8 @@ module(
 # Core Bazel dependencies
 bazel_dep(name = "rules_go", version = "0.54.0")  # https://github.com/bazel-contrib/rules_go/tags
 bazel_dep(name = "gazelle", version = "0.43.0")
+bazel_dep(name = "rules_cc", version = "0.1.1")  # https://github.com/bazelbuild/rules_cc/tags
+
 bazel_dep(name = "rules_oci", version = "2.2.6")  # https://github.com/bazel-contrib/rules_oci/tags
 bazel_dep(name = "rules_pkg", version = "1.1.0")  # https://github.com/bazelbuild/rules_pkg/tags
 #bazel_dep(name = "rules_python", version = "1.4.0")  # https://github.com/bazelbuild/rules_python/tags
@@ -23,40 +32,21 @@ bazel_dep(name = "platforms", version = "0.0.11")  #https://github.com/bazelbuil
 bazel_dep(name = "bazel_skylib", version = "1.7.1")  #https://github.com/bazelbuild/bazel-skylib/tags
 bazel_dep(name = "rules_distroless", version = "0.5.1")  # https://github.com/GoogleContainerTools/rules_distroless/tags
 
-#bazel_dep(name = "rules_cc", version = "0.1.1") # https://github.com/bazelbuild/rules_cc/tags
+bazel_dep(name = "rules_shell", version = "0.4.1")  # https://github.com/bazelbuild/rules_shell/tags
 
-bazel_dep(name = "rules_shell", version = "0.4.0")  # https://github.com/bazelbuild/rules_shell/tags
+# LLVM toolchain setup
+bazel_dep(name = "toolchains_llvm", version = "1.4.0")  # https://github.com/bazel-contrib/toolchains_llvm/tags
 
-# # Python toolchain setup
-# python = use_extension("@rules_python//python/extensions:python.bzl", "python")
-# python.toolchain(
-#     python_version = "3.13",
-#     is_default = True,
-# )
-# use_repo(python, "python_3_13")
+# Configure LLVM toolchain
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.toolchain(
+    llvm_version = "16.0.0",
+)
 
-# # Configure pip dependencies
-# pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
-# pip.parse(
-#     hub_name = "pypi",
-#     python_version = "3.13",
-#     requirements_lock = "//:requirements_lock.txt",
-# )
-# use_repo(pip, "pypi")
+use_repo(llvm, "llvm_toolchain")
+# use_repo(llvm, "llvm_toolchain_llvm") # if you depend on specific tools in scripts
 
-# # Register the Python toolchain
-# register_toolchains("//tools/python:python_toolchain")
-
-# # Configure rules_pkg to use our Python toolchain
-# pkg = use_extension("@rules_pkg//pkg:extensions.bzl", "pkg")
-# pkg.package(
-#     name = "pkg",
-#     python_interpreter = "@python_3_13//:python3",
-#     python_interpreter_target = "@python_3_13//:python3",
-#     # Ensure the Python interpreter is available in the execution environment
-#     python_interpreter_path = "python3",
-# )
-# use_repo(pkg, "pkg")
+register_toolchains("@llvm_toolchain//:all")
 
 # Go toolchain setup
 # https://github.com/bazel-contrib/rules_go/blob/master/docs/go/core/bzlmod.md#go-sdks
