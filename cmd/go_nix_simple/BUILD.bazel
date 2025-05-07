@@ -12,7 +12,7 @@ load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load", "oc
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 #load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
-# Define the Go library for the application code
+# Define the Go library
 go_library(
     name = "go_nix_simple_lib",
     srcs = ["go_nix_simple.go"],
@@ -28,13 +28,40 @@ go_library(
         "@com_github_prometheus_client_golang//prometheus/promhttp",
         "@com_github_redis_go_redis_v9//:go-redis",
     ],
+    cgo = True,
 )
+
+# Tests!!
+# https://github.com/bazel-contrib/rules_go/blob/master/go/private/rules/test.bzl
+# Go race detector is linked against these LLVM precompiled binaries
+# https://github.com/golang/go/blob/master/src/runtime/race/README
 
 # Unit tests
 go_test(
     name = "go_nix_simple_test",
     size = "small",
     srcs = ["go_nix_simple_test.go"],
+    embed = [":go_nix_simple_lib"],
+    pure = "on",
+)
+
+# Race detection test
+go_test(
+    name = "go_nix_simple_race_test",
+    size = "medium",
+    srcs = ["go_nix_simple_test.go"],
+    embed = [":go_nix_simple_lib"],
+    pure = "off",
+    race = "on",
+    tags = ["requires-cgo"],
+)
+
+# Fuzzing test for pyroscopeServer URL
+# https://go.dev/doc/security/fuzz/
+go_test(
+    name = "go_nix_simple_fuzz_test",
+    size = "medium",
+    srcs = ["go_nix_simple_fuzz_test.go"],
     embed = [":go_nix_simple_lib"],
     pure = "on",
 )

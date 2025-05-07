@@ -1,4 +1,0 @@
-# .bazel/patches/BUILD.bazel
-package(default_visibility = ["//visibility:public"])
-
-exports_files(["prometheus_cgo.patch"])
