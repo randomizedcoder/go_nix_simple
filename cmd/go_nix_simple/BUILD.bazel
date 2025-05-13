@@ -11,6 +11,7 @@ load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load", "oci_push")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 #load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+#load("@rules_cc//cc:defs.bzl", "cc_library")
 
 # Define the Go library
 go_library(
@@ -29,6 +30,11 @@ go_library(
         "@com_github_redis_go_redis_v9//:go-redis",
     ],
     cgo = True,
+    cdeps = [
+        "@zlib//:zlib",
+        #"@libarchive//:libarchive",
+    ],
+    tags = ["requires-cgo"],
 )
 
 # Tests!!
@@ -55,6 +61,7 @@ go_test(
     race = "on",
     env_inherit = ["PATH"],
     tags = ["requires-cgo"],
+    cdeps = ["@zlib//:zlib"],
 )
 
 # Fuzzing test for pyroscopeServer URL
@@ -71,9 +78,15 @@ go_test(
 go_binary(
     name = "go_nix_simple",
     embed = [":go_nix_simple_lib"],
-    pure = "on",
+    #pure = "on",
+    pure = "off", # enable cgo :(
     static = "on",
     visibility = ["//visibility:public"],
+    cdeps = [
+        "@zlib//:zlib",
+        #"@libarchive//:libarchive",
+    ],
+    tags = ["requires-cgo"],
 )
 
 # Package binary

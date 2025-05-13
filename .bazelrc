@@ -47,6 +47,8 @@ build:hp4 --remote_timeout=3600
 # Shell toolchain configuration
 build:hp4 --shell_executable='/home/nobody/bash.wrapper'
 #build:hp4 --incompatible_strict_action_env
+build:hp4 --action_env=LD_LIBRARY_PATH=/lib64:/lib
+build:hp4 --action_env=C_INCLUDE_PATH=/include:/usr/include
 
 # Force remote execution
 build:hp4 --spawn_strategy=remote
