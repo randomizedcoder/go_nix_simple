@@ -53,6 +53,7 @@ go_test(
     embed = [":go_nix_simple_lib"],
     pure = "off",
     race = "on",
+    env_inherit = ["PATH"],
     tags = ["requires-cgo"],
 )
 

@@ -96,3 +96,15 @@ use_repo(
     "distroless_static_linux_arm64",
     #"distroless_static_linux_arm64_v8",
 )
+
+shell_deps = use_extension("@rules_shell//shell:extensions.bzl", "shell_deps")
+shell_deps.dependencies(
+    name = "shell_deps",
+    deps = {
+        "bash": "/bin/bash",
+        "mktemp": "/usr/bin/mktemp",
+        "rm": "/usr/bin/rm",
+        # exec is built into bash
+    },
+)
+use_repo(shell_deps, "shell_deps")

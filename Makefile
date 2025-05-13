@@ -5,6 +5,50 @@
 SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 
+# --- Help Target ---
+.PHONY: help
+help: ## Display this help message
+	@echo "Available targets:"
+	@echo ""
+	@echo "Build Targets:"
+	@echo "  all              - Build all Nix and Docker images"
+	@echo "  all-nix          - Build all Nix images"
+	@echo "  all-docker       - Build all Docker images"
+	@echo "  all-validate     - Build and validate all images"
+	@echo ""
+	@echo "Bazel Targets:"
+	@echo "  bazel-setup      - Install Bazel Gazelle"
+	@echo "  bazel-update     - Update Bazel dependencies"
+	@echo "  bazel-clean      - Clean Bazel build artifacts"
+	@echo "  bazel-build-all  - Build all Bazel image variants"
+	@echo "  bazel-build-all-remote - Build all variants with remote execution"
+	@echo "  bazel-build-distroless - Build distroless image variant"
+	@echo "  bazel-build-scratch - Build scratch image variant"
+	@echo "  bazel_build_remote - Build binary with remote execution"
+	@echo "  bazel_build_oci_distroless - Build OCI distroless image"
+	@echo "  bazel_build_oci_scratch - Build OCI scratch image"
+	@echo "  bazel-test-race  - Run Go race tests locally"
+	@echo "  bazel-test-race-remote - Run Go race tests with remote execution"
+	@echo ""
+	@echo "Validation Targets:"
+	@echo "  validate-all     - Validate all images"
+	@echo "  validate-all-nix - Validate all Nix images"
+	@echo "  validate-all-docker - Validate all Docker images"
+	@echo ""
+	@echo "Push Targets:"
+	@echo "  push-all         - Push all images"
+	@echo "  push-all-nix     - Push all Nix images"
+	@echo "  push-all-docker  - Push all Docker images"
+	@echo ""
+	@echo "Utility Targets:"
+	@echo "  prepare-output-dir - Create output directory for builds"
+	@echo "  generate-containerfiles - Generate Docker containerfiles"
+	@echo "  build-validator  - Build the image validation tool"
+	@echo "  run-validator    - Run the image validation tool"
+	@echo "  load-nix-result  - Load Nix build result into Docker"
+	@echo ""
+	@echo "For more detailed information about specific targets, please refer to the Makefile."
+
 # --- Build Information ---
 VERSION := $(shell cat VERSION)
 COMMIT := $(shell git describe --always)
@@ -111,7 +155,7 @@ BAZEL_TARGETS := $(foreach img,$(BAZEL_IMAGES),$(foreach plat,$(BAZEL_PLATFORMS)
 	install_bazel gazelle_init gazelle_run bazel_build bazel_run \
 	bazel_build_a_tarball bazel_go \
 	bazel-setup bazel-update bazel-clean \
-	bazel-build-all
+	bazel-build-all bazel-test-race bazel-test-race-remote
 
 # --- Aggregate Targets ---
 all: prepare-output-dir all-nix all-docker summary
@@ -137,10 +181,17 @@ bazel-clean:
 #------------------------
 # Bazel Build Targets
 #------------------------
-.PHONY: bazel-build-all bazel-build-distroless bazel-build-scratch
+.PHONY: bazel-build-all bazel-build-distroless bazel-build-scratch bazel-test-race bazel-test-race-remote
 
 # Build all variants
 bazel-build-all: bazel-build-distroless bazel-build-scratch
+
+# Go race test targets
+bazel-test-race:
+	bazel test --@rules_go//go/config:race //cmd/go_nix_simple:go_nix_simple_race_test
+
+bazel-test-race-remote:
+	bazel test --config=hp4 --@rules_go//go/config:race //cmd/go_nix_simple:go_nix_simple_race_test
 
 # Remote build target for all variants
 bazel-build-all-remote:
